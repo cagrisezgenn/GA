@@ -920,6 +920,8 @@ function [xbest, fbest, output, pop, scores, exitflag] = ga_call_compat(fhandle,
             exitflag = []; output = struct(); pop = []; scores = [];
         end
     end
+end
+
 % =============================== Alt Yapı ===============================
 function f = compact_log_wrapper(x, inner_fitfun)
 % Tek satır log: [idx  #feval  J  (J+Penalty)  nViol]
@@ -1027,6 +1029,9 @@ function [x,a_rel] = lin_MCK_consistent(t, ag, M, C, K)
     a_use = ( -(M\(C*v_use.' + K*x_use.')).' - ag(1:numel(t_use)).*r.' );
     x=nan(numel(t),n); a_rel=x; x(1:numel(t_use),:)=x_use; a_rel(1:numel(t_use),:)=a_use;
 end
+
+
+% --- NOTE: Artık 4. opsiyonel çıktı "v" döndürülebilir (mevcut çağrılar çalışmaya devam eder)
 
 function [J1, J2] = compute_objectives_split( ...
     src, obj, h_story_m, tail_sec, ...
