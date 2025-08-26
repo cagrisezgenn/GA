@@ -1,5 +1,8 @@
 function resp = simulate(design_set, x, mu_mult, t, ag, ...
-    M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg)
+    M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg, LOG)
+if nargin < 17 || isempty(LOG)
+    LOG = struct('verbose_decode', false);
+end
 design_set = double(design_set);
     if ~isfinite(design_set) || ~ismember(design_set,[1 2 3])
         design_set = 1;
@@ -17,7 +20,7 @@ design_set = double(design_set);
 
         % ---- GA decode (varsa)
         ga_local = struct('enable',~isempty(x),'design_set',design_set,'x',x);
-        [geom, sh, orf, hyd, therm, num, ~] = decode_design_apply(ga_local, geom, sh, orf, hyd, therm, num);
+        [geom, sh, orf, hyd, therm, num, ~] = decode_design_apply(ga_local, geom, sh, orf, hyd, therm, num, LOG);
 
         % ---- Türetilenler
         geom.Ap   = pi*geom.Dp^2/4;
