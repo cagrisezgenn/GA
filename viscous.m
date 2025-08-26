@@ -1599,21 +1599,6 @@ function [xbest, fbest, output, pop, scores, exitflag] = ga_call_compat(fhandle,
             exitflag = []; output = struct(); pop = []; scores = [];
         end
     end
-end
-function v = aux_if(field)
-    v = NaN;
-    try, v = output.bestfval; catch, end %#ok<*CTCH>
-end
-function v = cons_detail_if(which)
-    v = NaN;
-    try
-        % compute from last simulate if elinizde varsa; basit placeholder
-        if strcmpi(which,'E_ratio'), v = NaN; end
-        if strcmpi(which,'cav95'),   v = NaN; end
-    catch
-    end
-end
-
 % =============================== Alt Yapı ===============================
 function f = compact_log_wrapper(x, inner_fitfun)
 % Tek satır log: [idx  #feval  J  (J+Penalty)  nViol]
@@ -1720,16 +1705,6 @@ function [x,a_rel] = lin_MCK_consistent(t, ag, M, C, K)
     x_use = Z(:,1:n); v_use = Z(:,n+1:end);
     a_use = ( -(M\(C*v_use.' + K*x_use.')).' - ag(1:numel(t_use)).*r.' );
     x=nan(numel(t),n); a_rel=x; x(1:numel(t_use),:)=x_use; a_rel(1:numel(t_use),:)=a_use;
-end
-
-
-% --- NOTE: Artık 4. opsiyonel çıktı "v" döndürülebilir (mevcut çağrılar çalışmaya devam eder)
-function Jp = local_JPattern(n)
-% Güvenli, tutucu (full) JPattern — küçük boyutlarda performans yeterli
-% İstersen kendi bant/blok yapını sonra geri koyarsın.
-    Ns = n - 1;
-    Ntot = 2*n + 2*Ns + Ns + 2;
-    Jp = sparse(ones(Ntot, Ntot));  % tüm girişlerin potansiyel nonzero olduğunu varsay
 end
 
 function [J1, J2] = compute_objectives_split( ...
