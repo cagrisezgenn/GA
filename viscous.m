@@ -39,7 +39,6 @@ pp.gammaCMS          = 0.50;       % hibrit ağırlık (0→yalnız band, 1→ya
 pp.PSA.zeta          = 0.05;       % SDOF sönüm oranı
 pp.PSA.band_fac      = [0.8 1.2];  % T1 bandı (T1±%20)
 pp.PSA.Np_band       = 15;         % band içi periyot sayısı
-pp.PSA.use_augmented = true;       % tek ODE ile çok periyot (hızlı)
 pp.PSA.downsample_dt = 0.02;       % SA hesabı için isteğe bağlı downsample (<=0 kapalı)
 pp.PSA.use_parfor    = false;      % Parallel Toolbox varsa denersin
 
@@ -225,13 +224,8 @@ h_story_m = 3.0 * ones(n-1,1);   % tüm katlar 3.0 m ise
 
 %% -------------------- PSA fonksiyon seçimi ----------------------------
 
-if pp.PSA.use_augmented
-    f_band = @sdof_PSA_band_avg_aug;   % tek ODE, çok periyot
-    f_vec  = @sdof_PSA_vec_aug_ode;
-else
-    f_band = @sdof_PSA_band_avg_ode;   % periyot başına ayrı ODE
-    f_vec  = @sdof_PSA_vec_ode;
-end
+f_band = @sdof_PSA_band_avg_aug;   % tek ODE, çok periyot
+f_vec  = @sdof_PSA_vec_aug_ode;
 
 %% -------------------- Kayıtları oku → RAW (tekil & hedef dt kontrolü) -
 
