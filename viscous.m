@@ -2366,20 +2366,6 @@ function dz = aug_rhs(tt,zz,wn,zeta,agf)
     dz(2:2:end) = av;
 end
 
-% --------- PSA yardımcı (yalnız PSA için downsample) -------------------
-function [t2,a2] = psa_grid(t,a,dt_target)
-    if isempty(dt_target) || dt_target<=0
-        t2=t; a2=a; return;
-    end
-    dt = median(diff(t));
-    if dt >= dt_target-1e-12
-        t2=t; a2=a;
-    else
-        t2 = (t(1):dt_target:t(end)).';
-        a2 = pchip(t,a,t2);
-    end
-end
-
 % ===================== GA Setleri & Decode Yardımcıları =================
 function [lb,ub,int_idx,names] = ga_get_bounds(set_id)
     switch set_id
@@ -2628,25 +2614,6 @@ end
         resp.metrics = struct('x10_max',NaN,'a3_rms',NaN,'cav_frac_p95',NaN,'Q_abs_p95',NaN,'T_oil_max',NaN);
     end
 end
-function v = getfield_default(S, fname, defaultVal)
-% Güvenli alan okuma: alan yoksa/boşsa/NaN-Inf ise default döndür.
-    if ~isstruct(S) || ~isfield(S, fname) || isempty(S.(fname))
-        v = defaultVal;
-        return;
-    end
-    val = S.(fname);
-    if isnumeric(val)
-        if isempty(val) || any(~isfinite(val(:)))
-            v = defaultVal;
-        else
-            v = val;
-        end
-    else
-        % Sayısal olmayan türler için yalnızca boşluk kontrolü yaptık
-        v = val;
-    end
-end
-
 
 
 function Jp = local_JPattern(n)
@@ -2656,31 +2623,6 @@ function Jp = local_JPattern(n)
     Ntot = 2*n + 2*Ns + Ns + 2;
     Jp = sparse(ones(Ntot, Ntot));  % tüm girişlerin potansiyel nonzero olduğunu varsay
 end
-
-function val = getfield_default(S, name, defaultVal)
-% S alanı yoksa default döndürür
-    if ~isstruct(S) || ~isfield(S,name) || isempty(S.(name))
-        val = defaultVal;
-    else
-        val = S.(name);
-    end
-end
-
-function [tPSA, agPSA] = psa_grid(t, ag, down_dt)
-% PSA için opsiyonel yeniden örnekleme (yalnız downsample; upsample etmez)
-    t = t(:); ag = ag(:);
-    if nargin<3 || isempty(down_dt) || down_dt<=0
-        tPSA = t; agPSA = ag; return;
-    end
-    dt0 = median(diff(t),'omitnan');
-    if down_dt <= dt0*(1+1e-12)
-        tPSA = t; agPSA = ag; return;
-    end
-    tPSA  = (t(1):down_dt:t(end)).';
-    agPSA = interp1(t, ag, tPSA, 'pchip', 'extrap');
-end
-
-
 
 function [J1, J2] = compute_objectives_split( ...
     src, obj, tail_sec, ...
