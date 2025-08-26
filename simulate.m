@@ -65,7 +65,6 @@ if ~isfield(diag,'dP_orf_time_max') || any(~isfinite(diag.dP_orf_time_max))
 end
 
 % Ana dizilerde tekil NaN/Inf temizliği (fail yerine yumuşat)
-fixnf = @(A) (A + 0.*A);          % sınıfı korumak için num trick
 xD(~isfinite(xD)) = 0;  aD(~isfinite(aD)) = 0;
 
         % ---- Standart çıktı paketi
@@ -116,10 +115,6 @@ if numel(t) ~= size(xD,1) || numel(t) ~= size(aD,1)
     return;
 end
 
-
-        if numel(t)~=size(xD,1) || numel(t)~=size(aD,1)
-            resp.ok=false; resp.msg='Zaman uzunluğu uyuşmazlığı'; return;
-        end
 
         resp.ok=true; resp.msg='ok';
 
