@@ -66,7 +66,7 @@ obj.p95_penalty_w    = 0.20;      % hibritte pik cezası ağırlığı
 cons.on.spring_tau     = true;    % K1: yay kesme gerilmesi (τ_max ≤ τ_allow)
 cons.on.spring_slender = true;    % K2: L_free/D_m ≤ λ_max
 cons.on.stroke         = true;    % K3: max|drift| ≤ 0.9*L_gap
-cons.on.force_cap      = true;   % K4: max|F_story| ≤ F_cap  (varsayılan: kapalı; F_cap tanımla)
+cons.on.force_cap      = true;    % K4: max|F_story| ≤ F_cap
 cons.on.dp_quant       = true;    % K5: q≈0.99 Δp_orf ≤ dP_cap
 cons.on.thermal_dT     = true;    % K6: ΔT_est ≤ ΔT_cap
 cons.on.cav_frac       = false;    % K7: kavitasyon payı sınırı
@@ -82,7 +82,7 @@ cons.spring.L_free_auto_fac = 2.2; % 'auto' modda L_free ≈ fac * L_gap
 
 cons.stroke.util_factor = 0.90;   % izinli strok = 0.90*L_gap
 
-cons.force.F_cap        = inf;    % [N] cihaz kuvvet sınırı; Inf → devre dışı
+cons.force.F_cap        = 2e6;    % [N] cihaz kuvvet sınırı; sonlu → kısıt aktif (Inf → devre dışı)
 cons.dp.q               = 0.99;   % Δp_orf zaman-içi quantile
 cons.dp.agg             = 'max';  % kayıtlar arası: 'max' | 'cvar'
 cons.alpha_CVaR_cons    = 0.20;   % yalnız 'cvar' seçilirse kullanılır
