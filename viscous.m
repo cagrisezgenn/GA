@@ -1719,7 +1719,7 @@ function [f, aux] = eval_fitness_for_x(x, design_set, ...
       
 % === J1 & J2 (split) hesap — Pareto günlüğü için ===
 [J1_split, J2_split] = compute_objectives_split( ...
-    tern(obj.use_scaled_for_goal,'scaled','raw'), obj, tail_sec, ...
+    tern(obj.use_scaled_for_goal,'scaled','raw'), obj, h_story_m, tail_sec, ...
     t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
     t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
     M,Cstr,K,n,geom,sh,orf,hyd,therm,num, ...
@@ -1774,19 +1774,6 @@ function [xbest, fbest, output, pop, scores, exitflag] = ga_call_compat(fhandle,
             [xbest, fbest] = ga(fhandle, nvars, [], [], [], [], lb, ub, [], IntCon, opts);
             exitflag = []; output = struct(); pop = []; scores = [];
         end
-    end
-end
-function v = aux_if(field)
-    v = NaN;
-    try, v = output.bestfval; catch, end %#ok<*CTCH>
-end
-function v = cons_detail_if(which)
-    v = NaN;
-    try
-        % compute from last simulate if elinizde varsa; basit placeholder
-        if strcmpi(which,'E_ratio'), v = NaN; end
-        if strcmpi(which,'cav95'),   v = NaN; end
-    catch
     end
 end
 
@@ -1882,34 +1869,8 @@ function [M,K,C] = make_KCM(n,mv,kv,cv)
     end
 end
 
-function [x,a_rel] = lin_MCK_consistent(t, ag, M, C, K)
-    n  = size(M,1); r  = ones(n,1);
-    dt = median(diff(t));
-    agf = griddedInterpolant(t,ag,'linear','nearest');
-    odef = @(tt,z) [ z(n+1:end); M \ ( -C*z(n+1:end) - K*z(1:n) - M*r*agf(tt) ) ];
-    z0 = zeros(2*n,1);
-    opts = odeset('RelTol',2e-3,'AbsTol',1e-6,'MaxStep',max(dt*10,2e-3),'InitialStep',max(dt*0.25,1e-3));
-    sol = ode23tb(odef,[t(1) t(end)],z0,opts);
-    t_end = sol.x(end); idx = find(t <= t_end + 1e-12);
-    if isempty(idx), x=nan(numel(t),n); a_rel=x; warning('lin_MCK_consistent: early stop'); return; end
-    t_use = t(idx); Z = deval(sol,t_use).';
-    x_use = Z(:,1:n); v_use = Z(:,n+1:end);
-    a_use = ( -(M\(C*v_use.' + K*x_use.')).' - ag(1:numel(t_use)).*r.' );
-    x=nan(numel(t),n); a_rel=x; x(1:numel(t_use),:)=x_use; a_rel(1:numel(t_use),:)=a_use;
-end
-
-
-% --- NOTE: Artık 4. opsiyonel çıktı "v" döndürülebilir (mevcut çağrılar çalışmaya devam eder)
-function Jp = local_JPattern(n)
-% Güvenli, tutucu (full) JPattern — küçük boyutlarda performans yeterli
-% İstersen kendi bant/blok yapını sonra geri koyarsın.
-    Ns = n - 1;
-    Ntot = 2*n + 2*Ns + Ns + 2;
-    Jp = sparse(ones(Ntot, Ntot));  % tüm girişlerin potansiyel nonzero olduğunu varsay
-end
-
 function [J1, J2] = compute_objectives_split( ...
-    src, obj, tail_sec, ...
+    src, obj, h_story_m, tail_sec, ...
     t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
     t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
     M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg, design_set, x_ga)
@@ -1917,7 +1878,6 @@ function [J1, J2] = compute_objectives_split( ...
 % Compute objective components separately:
 %   J1 - IDR zarf oranı CVaR
 %   J2 - mutlak ivme (RMS+p95) zarf oranı CVaR
-    h_story_m = 3.0 * ones(n-1,1); % zaten üstte de var; buraya da koyduk
     [J1, ~] = compute_J1_IDR_over_records( ...
         src, obj, h_story_m, tail_sec, ...
         t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
