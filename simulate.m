@@ -82,7 +82,8 @@ xD(~isfinite(xD)) = 0;  aD(~isfinite(aD)) = 0;
                       'cav_frac_p95',cav_p95,'Q_abs_p95',diag.Q_abs_p95, ...
                       'T_oil_max',Toil_max);
 
-        resp.diag = diag;   % cav_frac_t dahil tüm zaman serisi diagnostiklerini dışarı ver
+        % Yalnızca gerekli tanı alanlarını saklayarak bellek kullanımını azalt
+        resp.diag = struct('cav_frac_t', diag.cav_frac_t);
 
         % Zarf kuvvet (hikaye bazında max → zaman serisi)
         F_story_env = max(abs(diag.F_story),[],2);   % Nt x 1
