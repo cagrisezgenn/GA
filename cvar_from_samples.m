@@ -1,4 +1,5 @@
 function v = cvar_from_samples(x, alpha)
+    % Örneklerden CVaR_α (Average Value-at-Risk)
     x = x(:); x = x(isfinite(x));
     if isempty(x), v = NaN; return; end
     q = quantile(x, 1-alpha);

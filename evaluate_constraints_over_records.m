@@ -76,6 +76,7 @@ cfg_dir = set_pf_ton_if_nan(cfg, t5, 0.5);
             for k = 1:numel(mus)
                 resp = simulate(design_set, x_ga, mus(k), t_s, ag_s, ...
                                 M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir);
+                                M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir, LOG);
 
                 if ~resp.ok
                     fail_mu = true;

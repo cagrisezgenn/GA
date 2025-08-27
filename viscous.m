@@ -1,3 +1,4 @@
+function [PARETO, LOG] = viscous(cfg, vis, prep, pp, sel, obj, cons, ga, LOG, PARETO)
 %% =====================================================================
 %  10-Katlı Çerçeve — ODE-only viskoz damper modeli (CLEAN / AHENK + Switch)
 %  (Sıkışabilirlik + Hat ataletı + Cd(Re) orifis + kavitasyon + 2-düğümlü ısı)
@@ -11,193 +12,25 @@
 % Pareto log kaydı
 global PARETO;
 if isempty(whos('global','PARETO')) || isempty(PARETO)
+%% =====================================================================
+
+[cfg_d, vis_d, prep_d, pp_d, sel_d, obj_d, cons_d, ga_d] = default_params();
+addpath(fileparts(mfilename('fullpath')));
+if nargin < 1 || isempty(cfg),  cfg  = cfg_d;  end
+if nargin < 2 || isempty(vis),  vis  = vis_d;  end
+if nargin < 3 || isempty(prep), prep = prep_d; end
+if nargin < 4 || isempty(pp),   pp   = pp_d;   end
+if nargin < 5 || isempty(sel),  sel  = sel_d;  end
+if nargin < 6 || isempty(obj),  obj  = obj_d;  end
+if nargin < 7 || isempty(cons), cons = cons_d; end
+if nargin < 8 || isempty(ga),   ga   = ga_d;   end
+if nargin < 9 || isempty(LOG)
+    LOG = struct('verbose_decode', false);
+end
+if nargin < 10 || isempty(PARETO)
     PARETO = struct('J1',[],'J2',[],'F',[],'Pen',[], ...
                     'set',[],'x',{{}},'feas',[]);
 end
-
-%% -------------------- Kullanıcı anahtarları ---------------------------
-
-% (1) Kayıt/yön seçimi + görselleştirme
-vis.make_plots          = true;
-vis.sel_rec             = 1;         % 1..R
-vis.sel_dir             = 'x';       % 'X' veya 'Y'
-vis.dual_run_if_needed  = true;      % plot_source ≠ sim_source ise ikinci koşu yap
-
-% (2) Örnekleme / yeniden örnekleme anahtarları
-prep.target_dt      = 0.005;     % hedef dt (s)
-prep.resample_mode  = 'auto';     % 'auto'|'off'|'force'
-prep.regrid_method  = 'pchip';   % 'pchip'|'linear'
-prep.tol_rel        = 1e-6;      % dt eşitlik toleransı (göreli)
-
-% (3) Şiddet eşitleme / PSA / CMS anahtarları
-pp.on.intensity      = true;       % band-ortalama Sa(+CMS) normalizasyonu (yalnız GA için)
-pp.on.CMS            = false;      % cms_target.mat varsa ve kullanmak istersen true
-pp.gammaCMS          = 0.50;       % hibrit ağırlık (0→yalnız band, 1→yalnız CMS)
-
-pp.PSA.zeta          = 0.05;       % SDOF sönüm oranı
-pp.PSA.band_fac      = [0.8 1.2];  % T1 bandı (T1±%20)
-pp.PSA.Np_band       = 15;         % band içi periyot sayısı
-pp.PSA.downsample_dt = 0.02;       % SA hesabı için isteğe bağlı downsample (<=0 kapalı)
-pp.PSA.use_parfor    = false;      % Parallel Toolbox varsa denersin
-
-% (4) Arias penceresi & kuyruk
-pp.on.arias          = true;
-pp.tail_sec          = 20;
-
-% (5) Simülasyon ve grafik için veri kaynağı seçimi
-%     'raw'    : ham ivmeler (genlik korunur)
-%     'scaled' : şiddet eşitlenmiş ivmeler (GA/normalize amaçlı)
-sel.sim_source  = 'scaled';
-sel.plot_source = 'raw';
-
-%% -------------------- Amaç fonksiyonu anahtarları ---------------------
-
-% (A) Hedef katlar ve metrik
-obj.idx_disp_story   = 10;        % d_10 → tepe yer değiştirme
-obj.idx_acc_story    = 3;         % a_3  → ivme metriği
-obj.acc_metric       = 'rms+p95';     % 'rms' | 'energy' | 'rms+p95' (hibrit)
-obj.p95_penalty_w    = 0.20;      % hibritte pik cezası ağırlığı
-
-%% -------------------- Kısıt anahtarları -------------------------------
-
-% Kısıtları aç/kapa ve eşik/ceza ayarları
-cons.on.spring_tau     = true;    % K1: yay kesme gerilmesi (τ_max ≤ τ_allow)
-cons.on.spring_slender = true;    % K2: L_free/D_m ≤ λ_max
-cons.on.stroke         = true;    % K3: max|drift| ≤ 0.9*L_gap
-cons.on.force_cap      = true;    % K4: max|F_story| ≤ F_cap
-cons.on.dp_quant       = true;    % K5: q≈0.99 Δp_orf ≤ dP_cap
-cons.on.thermal_dT     = true;    % K6: ΔT_est ≤ ΔT_cap
-cons.on.cav_frac       = false;    % K7: kavitasyon payı sınırı
-cons.on.qsat_margin    = true;    % K8: Q 95p ≤ margin*Qcap_big
-cons.on.fail_bigM      = true;    % K9: Simülasyon başarısızsa büyük ceza
-
-% Eşikler / limitler
-cons.spring.tau_allow   = 300e6;  % [Pa] yay çeliği için tipik, gerekirse güncelle
-cons.spring.lambda_max  = 12.0;   % boy/çap sınırı
-cons.spring.L_free_mode = 'auto'; % 'auto' veya 'fixed'
-cons.spring.L_free_fix  = NaN;    % 'fixed' için metre cinsinden serbest boy
-cons.spring.L_free_auto_fac = 2.2; % 'auto' modda L_free ≈ fac * L_gap
-
-cons.stroke.util_factor = 0.90;   % izinli strok = 0.90*L_gap
-
-cons.force.F_cap        = 2e6;    % [N] cihaz kuvvet sınırı; sonlu → kısıt aktif (Inf → devre dışı)
-cons.dp.q               = 0.99;   % Δp_orf zaman-içi quantile
-cons.dp.agg             = 'max';  % kayıtlar arası: 'max' | 'cvar'
-cons.alpha_CVaR_cons    = 0.20;   % yalnız 'cvar' seçilirse kullanılır
-
-cons.thermal.cap_C      = 30.0;   % [°C] yağ ısınma sınırı
-cons.hyd.cav_frac_cap   = 0.15;   % kavitasyon zaman oranı sınırı (95p)
-cons.hyd.Q_margin       = 0.90;   % Q 95p ≤ margin*Qcap_big
-
-% Ceza ayarları
-cons.pen.power  = 2;              % hinge^power
-cons.pen.bigM   = 1e6;            % simülasyon başarısızlığında eklenecek ceza
-cons.pen.lambda = struct( ...     % kısıt başına ağırlıklar
-    'spring_tau',     0.3, ...%0.3
-    'spring_slender', 0.2, ...%0.2
-    'stroke',         1.2, ...%1.2
-    'force_cap',      0, ...%0
-    'dp_quant',       0.5, ...%0.5
-    'thermal_dT',     0.2, ...%0.2
-    'cav_frac',       1.5, ...%1.5
-    'qsat_margin',    0.3, ...%0.3
-    'fail_bigM',      1 );%
-
-% Kısıt simülasyon kaynağı ve μ seti (amaçla tutarlı kalsın)
-cons.src_for_constraints = 'raw';           % kısıtları 'raw' ile değerlendir
-if isfield(obj,'mu_scenarios')
-    cons.mu_scenarios = obj.mu_scenarios;
-else
-    cons.mu_scenarios = [0.75 1.00 1.25];  % varsayılan; aşağıda obj tanımlanınca senkronlayacağız
-end
-
-% (B) Arias penceresi içi ölçüm
-obj.use_arias_window = true;      % true → [t5,t95] aralığında metrik
-obj.window_source    = 'same';    % 'same' → kullanılan seri üzerinden hesapla
-
-% (C) Yön zarfı
-obj.dir_mode         = 'Xonly'; % 'envelope' (=max(X,Y)) | 'Xonly' | 'Yonly'
-
-% (D) μ-robustluk
-obj.mu_scenarios = [0.9 1.0 1.1];
-obj.mu_aggregate = 'weighted';
-obj.mu_weights   = [0.25 0.50 0.25];
-% Kısıt μ-senaryolarını amaçla hizala
-cons.mu_scenarios = obj.mu_scenarios;
-
-% (E) Risk agregasyonu (kayıtlar üzerinde)
-obj.use_scaled_for_goal = true;   % amaç için 'scaled' setiyle çalış (önerilir)
-obj.alpha_CVaR       = 0.20;      % tail payı
-obj.weights_da       = [0.5 0.5]; % [w_disp, w_acc] toplam 1.0
-
-% (F) Referans tanımı
-% d_ref ve a_ref: aynı kayıt/yön için (damper yok, μ=1.0), sabit baz koşusundan.
-% NOT: Bu referanslar bir kez hesaplanır ve tasarımla değişmez.
-
-%% -------------------- Model anahtarları (blok-bazlı aç/kapa) ----------
-
-% NOT: Bu blok dosyanın BAŞINDA olmalı. Aşağıdaki varsayılanları
-% dilediğin gibi değiştir; ayrıca ensure_cfg_defaults() eksikleri tamamlar.
-cfg.use_orifice = true;
-cfg.use_thermal = true;
-cfg.on.CdRe            = true;
-cfg.on.Rlam            = true;
-cfg.on.Rkv             = true;
-cfg.on.Qsat            = true;
-cfg.on.cavitation      = true;
-cfg.on.dP_cap          = true;
-cfg.on.hyd_inertia     = true;
-cfg.on.leak            = true;
-cfg.on.pressure_ode    = true;
-cfg.on.pressure_force  = true;
-cfg.on.mu_floor        = true;
-
-
-% Basınç-kuvvet rampa/kazanç (PF)
-cfg.PF.mode  = 'ramp';
-cfg.PF.t_on  = nan;      % t5 sonrası atanacak  <-- BURASI NaN KALSIN
-cfg.PF.tau   = 0.9;      % 4.0 → 1.5  (önerim)
-cfg.PF.gain  = 1.7;      % 0.45 → 1.0 (önerim)
-cfg.on.pf_resistive_only = true;
-
-% Eksik/yanlış alanlar için güvenli tamamlayıcı (guard)
-cfg = ensure_cfg_defaults(cfg);
-
-%% -------------------- GA/Opt tasarım anahtarları ----------------------
-
-ga.enable      = false;    % GA tasarım vektörü uygula? (false → baz set)
-ga.design_set  = 1;        % 1|2|3 (aşağıdaki set tanımları)
-ga.x           = [];       % Örn: set-1 için 9x1 vektör, boşsa uygulanmaz
-% Örnek: otomatik orta-nokta denemesi
-% [lb,ub,~,~] = ga_get_bounds(ga.design_set); ga.x = 0.5*(lb+ub); ga.enable=true;
-
-%% -------------------- GA ÇALIŞTIRICI (opsiyonel) ----------------------
-
-% --- Değişken sınırları ve IntCon hazırlığı ---
-[lb,ub,int_idx,~] = ga_get_bounds(ga.design_set);
-if isempty(int_idx)
-    IntCon = [];           % tamsayı değişken yok
-else
-    IntCon = int_idx(:)';  % tamsayı indeks vektörü
-end
-
-% GA anahtarları
-ga.opt.enable       = true;
-ga.opt.seed         = 11;
-ga.opt.popsize      = 6;
-% Çok aşamalı akış: önce set-1, sonra set-3
-ga.opt.multi_stage  = [1];
-% Aşama başına nesil sayısı (opsiyonel):
-ga.opt.maxgen_stage = [2];  % her blok için nesil
-ga.opt.maxgen       = ga.opt.maxgen_stage(1);   % ilk aşama için başlangıç
-ga.opt.use_parallel  = false;      % GA.UseParallel
-ga.opt.lhs_refine    = false;      % 2-aşamalı LHS (coarse→refine)
-ga.opt.cache_enable  = false;      % aynı x için memoize
-ga.opt.fail_early_k  = 6;         % erken çıkış eşiği (başarısız sim sayısı)
-ga.opt.save_log      = 'runLog_ga.mat';  % nüfus & en iyi çözüm logu
-% daraltma parametreleri
-ga.opt.keep_top     = 0.20;   % en iyi %20'yi tut
-ga.opt.buffer_fac   = 0.10;   % p10–p90 etrafına %10 tampon
 
 %% -------------------- Girdiler (7 kayıt; sütunlar: t, ax, (ops) ay) ---
 
@@ -570,16 +403,7 @@ end
 end
 
     % --- Fitness sarıcı ---
-   inner_fitfun = @(xx) eval_fitness_for_x(xx, ga.design_set, ...
-    obj, cons_stage, pp.tail_sec, ...
-    t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
-    t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
-    M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg_stage, ...
-    ga.opt.cache_enable, ga.opt.fail_early_k);
-
-
-
-    fhandle = @(xx) compact_log_wrapper(xx, inner_fitfun);
+    fhandle = @(xx) compact_log_wrapper(xx, @inner_fitfun);
 
     % --- GA seçenekleri ---
     opts = optimoptions('ga', ...
@@ -618,7 +442,7 @@ end
 
     % --- Bu aşamanın en iyisini uygula → bir sonraki aşama bunun üstünde arar ---
     ga.enable = true; ga.x = xbest;
-    [geom, sh, orf, hyd, therm, num, ga] = decode_design_apply(ga, geom, sh, orf, hyd, therm, num);
+    [geom, sh, orf, hyd, therm, num, ga] = decode_design_apply(ga, geom, sh, orf, hyd, therm, num, LOG);
     ga.enable = false; ga.x = [];
 
     last_best = xbest; last_set = ga.design_set;
@@ -659,7 +483,7 @@ end
     % Son aşamanın x’i overlay/raporlar için kalsın
     ga.enable = true; ga.x = last_best; ga.best_x = last_best; ga.best_set = last_set;
     ga_dbg = struct('enable',true,'design_set',ga.best_set,'x',ga.best_x);
-[geom_dbg, ~, orf_dbg, hyd_dbg, therm_dbg, ~, ~] = decode_design_apply(ga_dbg, geom, sh, orf, hyd, therm, num);
+[geom_dbg, ~, orf_dbg, hyd_dbg, therm_dbg, ~, ~] = decode_design_apply(ga_dbg, geom, sh, orf, hyd, therm, num, LOG);
 
 fprintf('DBG set-%d: n_orf=%d | d_o=%.3f mm | Ao=%.3e m^2 | Lgap=%.1f mm | Vmin_fac=%.2f | Lh=%.3f mm | resFactor=%.0f\n', ...
     ga.best_set, orf_dbg.n_orf, 1e3*geom_dbg.d_o, orf_dbg.n_orf*(pi*geom_dbg.d_o^2/4), ...
@@ -884,3 +708,492 @@ T_dev = table(Vals_Fmax, Vals_stroke, Vals_dpq, Vals_dT, Vals_cav, Vals_Qp95, ..
 writetable(T,    fullfile('out','cons_summary.csv'));
 writetable(T_dev,fullfile('out','device_summary.csv'));
 fprintf('CSV yazıldı: out/cons_summary.csv, out/device_summary.csv\n');
+
+
+% ---------- Yardımcılar ----------
+hinge  = @(r) max(0, r - 1);
+norm0  = @(x) (abs(x) < 1e-12) * 0 + (abs(x) >= 1e-12) .* x;  % -0.000 yerine 0.000
+pwr    = cons.pen.power;
+lam    = cons.pen.lambda;
+
+pen_sum = 0;   % bileşenlerden yeniden hesaplanan toplam (kontrol amaçlı)
+
+% ---------- Özet oranlar + bireysel ceza katkıları ----------
+cdt = cons_detail;  % kısaltma
+
+if cons.on.spring_tau
+    r = norm0(cdt.ratios.spring_tau);
+    pen_i = lam.spring_tau * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
+    fprintf('τ_max/τ_allow         = %.3f   [pen=%.3g]\n', r, pen_i);
+end
+
+if cons.on.spring_slender
+    r = norm0(cdt.ratios.spring_slender);
+    pen_i = lam.spring_slender * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
+    fprintf('L_free/D_m / λ_max    = %.3f   [pen=%.3g]\n', r, pen_i);
+end
+
+if cons.on.stroke
+    r = norm0(cdt.ratios.stroke);
+    pen_i = lam.stroke * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
+    fprintf('stroke/(0.9*L_gap)    = %.3f   [pen=%.3g]\n', r, pen_i);
+end
+
+if cons.on.force_cap && isfinite(cons.force.F_cap)
+    r = norm0(cdt.ratios.force_cap);
+    pen_i = lam.force_cap * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
+    fprintf('F_max/F_cap           = %.3f   [pen=%.3g]\n', r, pen_i);
+end
+
+if cons.on.dp_quant
+    r = norm0(cdt.ratios.dp_quant);
+    pen_i = lam.dp_quant * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
+    fprintf('q_Δp/dP_cap           = %.3f (q=%.3f)   [pen=%.3g]\n', r, cons.dp.q, pen_i);
+end
+
+if cons.on.thermal_dT
+    r = norm0(cdt.ratios.thermal_dT);
+    pen_i = lam.thermal_dT * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
+    fprintf('ΔT/ΔT_cap             = %.3f   [pen=%.3g]\n', r, pen_i);
+end
+
+if cons.on.cav_frac
+    r = norm0(cdt.ratios.cav_frac);
+    pen_i = lam.cav_frac * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
+    fprintf('cav95/γ_cap           = %.3f   [pen=%.3g]\n', r, pen_i);
+end
+
+if cons.on.qsat_margin
+    r = norm0(cdt.ratios.qsat_margin);
+    pen_i = lam.qsat_margin * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
+    fprintf('Q95/(margin*Qcap_big) = %.3f   [pen=%.3g]\n', r, pen_i);
+end
+
+
+% BigM (sim başarısızlığı) bilgilendirmesi ve katkısı
+if cons.on.fail_bigM && cdt.any_fail
+    pen_BigM = cons.pen.bigM * lam.fail_bigM;
+    pen_sum  = pen_sum + pen_BigM;
+    fprintf('Sim başarısız (≥1 koşu): BigM cezası eklendi. [pen=%.3g]\n', pen_BigM);
+end
+
+fprintf('--- Penalty (bileşenlerden) ≈ %.6g\n', pen_sum);
+
+
+
+% ---------- İsteğe bağlı tanılama: zarf/metrik özetleri ----------
+if isfield(cons_detail,'Fmax_records')
+    % Kayıt zarfı / agregeler (dpq_all için agresyon kuralını uygula)
+    Fmax_all   = max(cons_detail.Fmax_records,   [], 'omitnan');
+    stroke_all = max(cons_detail.stroke_records, [], 'omitnan');
+    if isfield(cons,'dp') && isfield(cons.dp,'agg') && strcmpi(cons.dp.agg,'cvar')
+        dpq_all = cvar_from_samples(cons_detail.dpq_records(:), cons.alpha_CVaR_cons);
+    else
+        dpq_all = max(cons_detail.dpq_records, [], 'omitnan');
+    end
+    dT_all   = max(cons_detail.dT_records,   [], 'omitnan');
+    cav_all  = max(cons_detail.cav_records,  [], 'omitnan');
+    Qp95_all = max(cons_detail.Qp95_records, [], 'omitnan');
+
+    fprintf('--- Tanılama (zarf değerleri) ---\n');
+    fprintf('Fmax=%.3e N | stroke=%.3e m | dpq=%.3e Pa | ΔT=%.2f C | cav95=%.3f | Q95=%.3e m^3/s\n', ...
+        Fmax_all, stroke_all, dpq_all, dT_all, cav_all, Qp95_all);
+end
+
+    function [f, aux] = inner_fitfun(xx)
+        [f, aux, PARETO] = eval_fitness_for_x(xx, ga.design_set, ...
+            obj, cons_stage, pp.tail_sec, ...
+            t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+            t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
+            M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg_stage, ...
+            ga.opt.cache_enable, ga.opt.fail_early_k, PARETO);
+    end
+
+end
+
+% ======================================================================
+%                             FONKSİYONLAR
+% ======================================================================
+function ratio = spring_tau_ratio(Fmax, sh, tau_allow)
+    C  = max(sh.D_m, eps) / max(sh.d_w, eps);
+    Kw = (4*C - 1)/(4*C - 4) + 0.615/C;
+    tau_max = (8 * Fmax * max(sh.D_m,eps) / max(pi*sh.d_w^3, eps)) * Kw;
+    ratio = tau_max / max(eps, tau_allow);
+end
+
+function P = lhs_population(lb,ub,N)
+    D = numel(lb); P = zeros(N,D);
+    for d=1:D
+        edges = linspace(0,1,N+1);
+        centers = (edges(1:end-1)+edges(2:end))/2;
+        P(:,d) = lb(d) + centers(randperm(N))' .* (ub(d)-lb(d));
+    end
+end
+
+function [f, aux, PARETO] = eval_fitness_for_x(x, design_set, ...
+    obj, cons, tail_sec, ...
+    t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+    t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
+    M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg, ...
+    use_cache, fail_early_k, PARETO)
+
+    % ---- Önbellek anahtarı
+    persistent memo
+    if isempty(memo), memo = containers.Map('KeyType','char','ValueType','any'); end
+    key = sprintf('set%d|%s', design_set, mat2str(x,8));
+
+    if use_cache && isKey(memo,key)
+        data = memo(key); f = data.f; aux = data.aux; return;
+    end
+
+    % ---- Tasarıma uygula ve değerlendir
+    try
+        % GA decode’u simulate içinde değil, doğrudan burada yapmaya gerek yok;
+        % compute/evaluate fonksiyonları simulate’i çağırırken set/x’ı geçiriyoruz.
+
+        % Amaç: J
+        goal_src = tern(obj.use_scaled_for_goal,'scaled','raw');
+        [J, ~] = compute_objective_over_records( ...
+    goal_src, obj, tail_sec, ...
+            t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+            t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
+            M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_with_ga(design_set,x,geom,sh,orf,hyd,therm,num,cfg), ...
+    design_set, x);
+
+        % Kısıt: Penalty (erken çıkış desteği ile)
+        cons_loc = cons; cons_loc.fail_early_k = fail_early_k;
+        [Penalty, cons_detail] = evaluate_constraints_over_records( ...
+            cons_loc, cons.src_for_constraints, obj, tail_sec, ...
+            t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+            t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
+            M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_with_ga(design_set,x,geom,sh,orf,hyd,therm,num,cfg), ...
+    design_set, x);
+      
+% === J1 & J2 (split) hesap — Pareto günlüğü için ===
+[J1_split, J2_split] = compute_objectives_split( ...
+    tern(obj.use_scaled_for_goal,'scaled','raw'), obj, h_story_m, tail_sec, ...
+    t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+    t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
+    M,Cstr,K,n,geom,sh,orf,hyd,therm,num, ...
+    cfg_with_ga(design_set,x,geom,sh,orf,hyd,therm,num,cfg), ...
+    design_set, x);
+
+% aux içine koy
+aux_J1 = J1_split; aux_J2 = J2_split;
+
+% --- Pareto günlüğüne yaz ---
+PARETO.J1(end+1,1)  = aux_J1;
+PARETO.J2(end+1,1)  = aux_J2;
+PARETO.F(end+1,1)   = J + Penalty;
+PARETO.Pen(end+1,1) = Penalty;
+PARETO.set(end+1,1) = design_set;
+PARETO.x{end+1,1}   = x(:).';
+PARETO.feas(end+1,1)= (Penalty <= 1e-6);    % eşik: cezasız ≈ fizibıl
+
+        f = J + Penalty;
+        aux = struct('J',J,'Penalty',Penalty,'cons',cons_detail);
+
+        if use_cache, memo(key) = struct('f',f,'aux',aux); end
+    catch ME
+    % Güvenli büyük ceza + ayrıntılı rapor
+    f = 1e9;
+    aux = struct('err', getReport(ME, 'extended', 'hyperlinks', 'off'));
+end
+
+end
+
+function cfg2 = cfg_with_ga(design_set,x,geom,sh,orf,hyd,therm,num,cfg)
+    % simulate() tasarımı içerde decode ediyor; burada yalnız cfg’yi aynen geçiriyoruz.
+    %#ok<INUSD>
+    cfg2 = ensure_cfg_defaults(cfg);
+end
+function [xbest, fbest, output, pop, scores, exitflag] = ga_call_compat(fhandle, lb, ub, IntCon, opts)
+% GA için sürüm-uyumlu çağrı (6/4/2 çıktı destekler)
+    nvars = numel(lb);
+    try
+        % Yeni sürümler (6 çıktı)
+        [xbest, fbest, exitflag, output, pop, scores] = ...
+            ga(fhandle, nvars, [], [], [], [], lb, ub, [], IntCon, opts);
+    catch
+        try
+            % Orta sürümler (4 çıktı)
+            [xbest, fbest, exitflag, output] = ...
+                ga(fhandle, nvars, [], [], [], [], lb, ub, [], IntCon, opts);
+            pop = []; scores = [];
+        catch
+            % Eski sürümler (2 çıktı)
+            [xbest, fbest] = ga(fhandle, nvars, [], [], [], [], lb, ub, [], IntCon, opts);
+            exitflag = []; output = struct(); pop = []; scores = [];
+        end
+    end
+end
+
+% =============================== Alt Yapı ===============================
+function f = compact_log_wrapper(x, inner_fitfun)
+% Tek satır log: [idx  #feval  J  (J+Penalty)  nViol]
+% inner_fitfun: [f, aux] döndürebilir (f=J+Penalty), aux.J ve aux.cons.ratios içerebilir.
+    persistent ROW FEVAL
+    if isempty(ROW),   ROW   = 0; end
+    if isempty(FEVAL), FEVAL = 0; end
+    ROW   = ROW + 1;
+    FEVAL = FEVAL + 1;
+
+    J = NaN; nviol = 0;
+
+    try
+        [f_val, aux] = inner_fitfun(x);   % iki çıktı destekli
+        if isstruct(aux)
+            if isfield(aux,'J'), J = aux.J; end
+            if isfield(aux,'cons') && isfield(aux.cons,'ratios') && isstruct(aux.cons.ratios)
+                fn = fieldnames(aux.cons.ratios);
+                vals = zeros(numel(fn),1);
+                for i=1:numel(fn), vals(i) = aux.cons.ratios.(fn{i}); end
+                nviol = sum(vals > 1+1e-12);
+            end
+        end
+                     f = f_val;
+
+        % Hata raporu geldiyse konsola bas
+        if isstruct(aux) && isfield(aux,'err') && ~isempty(aux.err)
+            fprintf('ERR: %s\n', aux.err);
+        end
+
+    catch
+        % inner_fitfun tek çıktı verirse
+        try
+            f = inner_fitfun(x);
+        catch
+            f = 1e9;   % güvenli büyük ceza
+        end
+    end
+
+    fprintf('%6d %15d %13.3f %13.3f %8d\n', ROW, FEVAL, J, f, nviol);
+end
+
+
+function [t2,a2] = regrid_to_target(t1,a1,prep)
+    % Tekil zaman düzelt, hedef dt'ye göre (auto/off/force)
+    [t1,iu]=unique(t1,'stable'); a1=a1(iu);
+    dt1 = median(diff(t1),'omitnan');
+    tgt = prep.target_dt; tol = max(prep.tol_rel*max(tgt,eps), 1e-12);
+    switch lower(prep.resample_mode)
+        case 'off'
+            t2=t1; a2=a1;
+        case 'force'
+            t2 = (t1(1):tgt:t1(end)).';
+            a2 = interp1(t1,a1,t2,prep.regrid_method,'extrap');
+        otherwise % 'auto'
+            if abs(dt1 - tgt) <= tol
+                t2=t1; a2=a1;
+            else
+                t2 = (t1(1):tgt:t1(end)).';
+                a2 = interp1(t1,a1,t2,prep.regrid_method,'extrap');
+                warning('Resample: dt=%.6g→%.6g s | N=%d', dt1, tgt, numel(t2));
+            end
+    end
+end
+
+function [t,a,t5,t95] = pick_series(src, rid, dir, ...
+    t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+    t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl)
+
+    src = lower(string(src)); dir = upper(string(dir));
+    switch src
+        case "raw"
+            if dir=="X", t=t_rawX{rid}; a=a_rawX{rid}; t5=t5x_raw(rid); t95=t95x_raw(rid);
+            else,         t=t_rawY{rid}; a=a_rawY{rid}; t5=t5y_raw(rid); t95=t95y_raw(rid); end
+        otherwise % 'scaled'
+            if dir=="X", t=t_sclX{rid}; a=a_sclX{rid}; t5=t5x_scl(rid); t95=t95x_scl(rid);
+            else,         t=t_sclY{rid}; a=a_sclY{rid}; t5=t5y_scl(rid); t95=t95y_scl(rid); end
+    end
+    if isempty(a), error('Kayıt #%d için %s yönü mevcut değil.', rid, dir); end
+end
+
+function [M,K,C] = make_KCM(n,mv,kv,cv)
+    M = diag(mv); K = zeros(n); C = zeros(n);
+    for i=1:n
+        kL=kv(i); cL=cv(i);
+        if i<n, kU=kv(i+1); cU=cv(i+1); else, kU=0; cU=0; end
+        K(i,i) = kL + (i<n)*kU;   C(i,i) = cL + (i<n)*cU;
+        if i>1, K(i,i-1)=-kL; C(i,i-1)=-cL; end
+        if i<n, K(i,i+1)=-kU; C(i,i+1)=-cU; end
+    end
+end
+
+function [x,a_rel] = lin_MCK_consistent(t, ag, M, C, K)
+    n  = size(M,1); r  = ones(n,1);
+    dt = median(diff(t));
+    agf = griddedInterpolant(t,ag,'linear','nearest');
+    odef = @(tt,z) [ z(n+1:end); M \ ( -C*z(n+1:end) - K*z(1:n) - M*r*agf(tt) ) ];
+    z0 = zeros(2*n,1);
+    opts = odeset('RelTol',2e-3,'AbsTol',1e-6,'MaxStep',max(dt*10,2e-3),'InitialStep',max(dt*0.25,1e-3));
+    sol = ode23tb(odef,[t(1) t(end)],z0,opts);
+    t_end = sol.x(end); idx = find(t <= t_end + 1e-12);
+    if isempty(idx), x=nan(numel(t),n); a_rel=x; warning('lin_MCK_consistent: early stop'); return; end
+    t_use = t(idx); Z = deval(sol,t_use).';
+    x_use = Z(:,1:n); v_use = Z(:,n+1:end);
+    a_use = ( -(M\(C*v_use.' + K*x_use.')).' - ag(1:numel(t_use)).*r.' );
+    x=nan(numel(t),n); a_rel=x; x(1:numel(t_use),:)=x_use; a_rel(1:numel(t_use),:)=a_use;
+end
+
+
+% --- NOTE: Artık 4. opsiyonel çıktı "v" döndürülebilir (mevcut çağrılar çalışmaya devam eder)
+
+function [J1, J2] = compute_objectives_split( ...
+    src, obj, h_story_m, tail_sec, ...
+    t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+    t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
+    M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg, design_set, x_ga)
+
+% Compute objective components separately:
+%   J1 - IDR zarf oranı CVaR
+%   J2 - mutlak ivme (RMS+p95) zarf oranı CVaR
+    [J1, ~] = compute_J1_IDR_over_records( ...
+        src, obj, h_story_m, tail_sec, ...
+        t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+        t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
+        M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg, design_set, x_ga);
+
+    [J2, ~] = compute_J2_ACC_over_records( ...
+        src, obj, h_story_m, tail_sec, ...
+        t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
+        t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
+        M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg, design_set, x_ga);
+end
+
+function [cfg, vis, prep, pp, sel, obj, cons, ga] = default_params()
+    % (1) Kayıt/yön seçimi + görselleştirme
+    vis.make_plots          = true;
+    vis.sel_rec             = 1;         % 1..R
+    vis.sel_dir             = 'x';       % 'X' veya 'Y'
+    vis.dual_run_if_needed  = true;      % plot_source ≠ sim_source ise ikinci koşu yap
+
+    % (2) Örnekleme / yeniden örnekleme anahtarları
+    prep.target_dt      = 0.005;     % hedef dt (s)
+    prep.resample_mode  = 'auto';    % 'auto'|'off'|'force'
+    prep.regrid_method  = 'pchip';   % 'pchip'|'linear'
+    prep.tol_rel        = 1e-6;      % dt eşitlik toleransı (göreli)
+
+    % (3) Şiddet eşitleme / PSA / CMS anahtarları
+    pp.on.intensity      = true;       % band-ortalama Sa(+CMS) normalizasyonu
+    pp.on.CMS            = false;      % cms_target.mat varsa ve kullanmak istersen true
+    pp.gammaCMS          = 0.50;       % hibrit ağırlık (0→yalnız band, 1→yalnız CMS)
+
+    pp.PSA.zeta          = 0.05;       % SDOF sönüm oranı
+    pp.PSA.band_fac      = [0.8 1.2];  % T1 bandı (T1±%20)
+    pp.PSA.Np_band       = 15;         % band içi periyot sayısı
+    pp.PSA.downsample_dt = 0.02;       % SA hesabı için isteğe bağlı downsample
+    pp.PSA.use_parfor    = false;      % Parallel Toolbox varsa denersin
+
+    % (4) Arias penceresi & kuyruk
+    pp.on.arias          = true;
+    pp.tail_sec          = 20;
+
+    % (5) Simülasyon ve grafik için veri kaynağı seçimi
+    sel.sim_source  = 'scaled';
+    sel.plot_source = 'raw';
+
+    % Amaç fonksiyonu anahtarları
+    obj.idx_disp_story   = 10;        % d_10 → tepe yer değiştirme
+    obj.idx_acc_story    = 3;         % a_3  → ivme metriği
+    obj.acc_metric       = 'rms+p95'; % 'rms' | 'energy' | 'rms+p95'
+    obj.p95_penalty_w    = 0.20;      % hibritte pik cezası ağırlığı
+
+    % Kısıt anahtarları
+    cons.on.spring_tau     = true;    % K1
+    cons.on.spring_slender = true;    % K2
+    cons.on.stroke         = true;    % K3
+    cons.on.force_cap      = true;    % K4
+    cons.on.dp_quant       = true;    % K5
+    cons.on.thermal_dT     = true;    % K6
+    cons.on.cav_frac       = false;   % K7
+    cons.on.qsat_margin    = true;    % K8
+    cons.on.fail_bigM      = true;    % K9
+
+    cons.spring.tau_allow   = 300e6;  % [Pa]
+    cons.spring.lambda_max  = 12.0;
+    cons.spring.L_free_mode = 'auto';
+    cons.spring.L_free_fix  = NaN;
+    cons.spring.L_free_auto_fac = 2.2;
+
+    cons.stroke.util_factor = 0.90;   % izinli strok = 0.90*L_gap
+
+    cons.force.F_cap        = 2e6;    % [N]
+    cons.dp.q               = 0.99;   % Δp_orf zaman-içi quantile
+    cons.dp.agg             = 'max';  % 'max' | 'cvar'
+    cons.alpha_CVaR_cons    = 0.20;   % yalnız 'cvar' için
+
+    cons.thermal.cap_C      = 30.0;   % [°C]
+    cons.hyd.cav_frac_cap   = 0.15;   % kavitasyon zaman oranı sınırı (95p)
+    cons.hyd.Q_margin       = 0.90;   % Q 95p ≤ margin*Qcap_big
+
+    cons.pen.power  = 2;              % hinge^power
+    cons.pen.bigM   = 1e6;            % sim başarısında eklenecek ceza
+    cons.pen.lambda = struct( ...
+        'spring_tau',     0.3, ...
+        'spring_slender', 0.2, ...
+        'stroke',         1.2, ...
+        'force_cap',      0, ...
+        'dp_quant',       0.5, ...
+        'thermal_dT',     0.2, ...
+        'cav_frac',       1.5, ...
+        'qsat_margin',    0.3, ...
+        'fail_bigM',      1 );
+
+    cons.src_for_constraints = 'raw';
+    cons.mu_scenarios = [0.75 1.00 1.25];
+
+    obj.use_arias_window = true;
+    obj.window_source    = 'same';
+    obj.dir_mode         = 'Xonly';
+    obj.mu_scenarios     = [0.9 1.0 1.1];
+    obj.mu_aggregate     = 'weighted';
+    obj.mu_weights       = [0.25 0.50 0.25];
+    cons.mu_scenarios    = obj.mu_scenarios;
+
+    obj.use_scaled_for_goal = true;
+    obj.alpha_CVaR       = 0.20;
+    obj.weights_da       = [0.5 0.5];
+
+    % Model anahtarları
+    cfg.use_orifice = true;
+    cfg.use_thermal = true;
+    cfg.on.CdRe            = true;
+    cfg.on.Rlam            = true;
+    cfg.on.Rkv             = true;
+    cfg.on.Qsat            = true;
+    cfg.on.cavitation      = true;
+    cfg.on.dP_cap          = true;
+    cfg.on.hyd_inertia     = true;
+    cfg.on.leak            = true;
+    cfg.on.pressure_ode    = true;
+    cfg.on.pressure_force  = true;
+    cfg.on.mu_floor        = true;
+
+    cfg.PF.mode  = 'ramp';
+    cfg.PF.t_on  = nan;      % t5 sonrası atanacak
+    cfg.PF.tau   = 0.9;
+    cfg.PF.gain  = 1.7;
+    cfg.on.pf_resistive_only = true;
+
+    cfg = ensure_cfg_defaults(cfg);
+
+    % GA/Opt tasarım anahtarları
+    ga.enable      = false;
+    ga.design_set  = 1;
+    ga.x           = [];
+
+    ga.opt.enable       = true;
+    ga.opt.seed         = 11;
+    ga.opt.popsize      = 6;
+    ga.opt.multi_stage  = [1];
+    ga.opt.maxgen_stage = [2];
+    ga.opt.maxgen       = ga.opt.maxgen_stage(1);
+    ga.opt.use_parallel = false;
+    ga.opt.lhs_refine   = false;
+    ga.opt.cache_enable = false;
+    ga.opt.fail_early_k = 6;
+    ga.opt.save_log     = 'runLog_ga.mat';
+    ga.opt.keep_top     = 0.20;
+    ga.opt.buffer_fac   = 0.10;
+end

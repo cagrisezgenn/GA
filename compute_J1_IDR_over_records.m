@@ -78,6 +78,7 @@ function [J1, out] = compute_J1_IDR_over_records( ...
         for k = 1:numel(mus)
             resp = simulate(design_set, x_ga, mus(k), t_s, ag_s, ...
                             M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir);
+                            M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir, LOG);
             if ~resp.ok
                 vals(k) = 5 * d_ref;  % fail durumunda güvenli büyük ceza
                 continue;
@@ -91,4 +92,5 @@ function [J1, out] = compute_J1_IDR_over_records( ...
         if isWeighted, d_agg = nansum(wmu .* vals(:));
         else,          d_agg = max(vals, [], 'omitnan'); end
     end
+end
 end
