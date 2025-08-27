@@ -7,6 +7,7 @@ function [J2, out] = compute_J2_ACC_over_records( ...
     if numel(varargin) >= 2, design_set = varargin{1}; x_ga = varargin{2};
     else, design_set = 0; x_ga = []; end
 
+    useScaled = strcmpi(src,'scaled');
          useScaled = strcmpi(src,'scaled');
     if useScaled
         tX=t_sclX; tY=t_sclY; aX=a_sclX; aY=a_sclY;
