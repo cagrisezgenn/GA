@@ -1731,10 +1731,6 @@ aux_J1 = J1_split; aux_J2 = J2_split;
 
 % --- Pareto günlüğüne yaz ---
 global PARETO;
-if isempty(PARETO) || ~isstruct(PARETO)
-    PARETO = struct('J1',[],'J2',[],'F',[],'Pen',[],...
-                    'set',[],'x',{{}},'feas',[]);
-end
 PARETO.J1(end+1,1)  = aux_J1;
 PARETO.J2(end+1,1)  = aux_J2;
 PARETO.F(end+1,1)   = J + Penalty;
