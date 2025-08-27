@@ -1,5 +1,8 @@
 function resp = simulate(design_set, x, mu_mult, t, ag, ...
-    M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg)
+    M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg, LOG)
+if nargin < 17 || isempty(LOG)
+    LOG = struct('verbose_decode', false);
+end
 design_set = double(design_set);
     if ~isfinite(design_set) || ~ismember(design_set,[1 2 3])
         design_set = 1;
@@ -17,7 +20,7 @@ design_set = double(design_set);
 
         % ---- GA decode (varsa)
         ga_local = struct('enable',~isempty(x),'design_set',design_set,'x',x);
-        [geom, sh, orf, hyd, therm, num, ~] = decode_design_apply(ga_local, geom, sh, orf, hyd, therm, num);
+        [geom, sh, orf, hyd, therm, num, ~] = decode_design_apply(ga_local, geom, sh, orf, hyd, therm, num, LOG);
 
         % ---- Türetilenler
         geom.Ap   = pi*geom.Dp^2/4;
@@ -64,6 +67,7 @@ end
 % Ana dizilerde tekil NaN/Inf temizliği (fail yerine yumuşat)
 xD(~isfinite(xD)) = 0;
 aD(~isfinite(aD)) = 0;
+xD(~isfinite(xD)) = 0;  aD(~isfinite(aD)) = 0;
 
         % ---- Standart çıktı paketi
         resp.y = struct('x',xD,'v',vD,'a',aD,'t',t);
@@ -112,7 +116,6 @@ if numel(t) ~= size(xD,1) || numel(t) ~= size(aD,1)
     resp.msg = 'Zaman uzunluğu uyuşmazlığı';
     return;
 end
-
         resp.ok=true; resp.msg='ok';
 
     catch ME
@@ -127,4 +130,3 @@ end
         resp.metrics = struct('x10_max',NaN,'a3_rms',NaN,'cav_frac_p95',NaN,'Q_abs_p95',NaN,'T_oil_max',NaN);
     end
 end
-
