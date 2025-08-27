@@ -14,6 +14,101 @@ global PARETO;
 if isempty(whos('global','PARETO')) || isempty(PARETO)
 %% =====================================================================
 
+%% -------------------- Kullanıcı anahtarları ---------------------------
+
+% (1) Kayıt/yön seçimi + görselleştirme
+vis.make_plots          = true;
+vis.sel_rec             = 1;         % 1..R
+vis.sel_dir             = 'x';       % 'X' veya 'Y'
+vis.dual_run_if_needed  = true;      % plot_source ≠ sim_source ise ikinci koşu yap
+
+% (2) Örnekleme / yeniden örnekleme anahtarları
+prep.target_dt      = 0.005;     % hedef dt (s)
+prep.resample_mode  = 'auto';     % 'auto'|'off'|'force'
+prep.regrid_method  = 'pchip';   % 'pchip'|'linear'
+prep.tol_rel        = 1e-6;      % dt eşitlik toleransı (göreli)
+
+% (3) Şiddet eşitleme / PSA / CMS anahtarları
+pp.on.intensity      = true;       % band-ortalama Sa(+CMS) normalizasyonu (yalnız GA için)
+pp.on.CMS            = false;      % cms_target.mat varsa ve kullanmak istersen true
+pp.gammaCMS          = 0.50;       % hibrit ağırlık (0→yalnız band, 1→yalnız CMS)
+
+pp.PSA.zeta          = 0.05;       % SDOF sönüm oranı
+pp.PSA.band_fac      = [0.8 1.2];  % T1 bandı (T1±%20)
+pp.PSA.Np_band       = 15;         % band içi periyot sayısı
+pp.PSA.downsample_dt = 0.02;       % SA hesabı için isteğe bağlı downsample (<=0 kapalı)
+pp.PSA.use_parfor    = false;      % Parallel Toolbox varsa denersin
+
+% (4) Arias penceresi & kuyruk
+pp.on.arias          = true;
+pp.tail_sec          = 20;
+
+% (5) Simülasyon ve grafik için veri kaynağı seçimi
+%     'raw'    : ham ivmeler (genlik korunur)
+%     'scaled' : şiddet eşitlenmiş ivmeler (GA/normalize amaçlı)
+sel.sim_source  = 'scaled';
+sel.plot_source = 'raw';
+
+%% -------------------- Amaç fonksiyonu anahtarları ---------------------
+
+% (A) Hedef katlar ve metrik
+obj.idx_disp_story   = 10;        % d_10 → tepe yer değiştirme
+obj.idx_acc_story    = 3;         % a_3  → ivme metriği
+obj.acc_metric       = 'rms+p95';     % 'rms' | 'energy' | 'rms+p95' (hibrit)
+obj.p95_penalty_w    = 0.20;      % hibritte pik cezası ağırlığı
+
+%% -------------------- Kısıt anahtarları -------------------------------
+
+% Kısıtları aç/kapa ve eşik/ceza ayarları
+cons.on.spring_tau     = true;    % K1: yay kesme gerilmesi (τ_max ≤ τ_allow)
+cons.on.spring_slender = true;    % K2: L_free/D_m ≤ λ_max
+cons.on.stroke         = true;    % K3: max|drift| ≤ 0.9*L_gap
+cons.on.force_cap      = false;   % K4: max|F_story| ≤ F_cap
+cons.on.dp_quant       = true;    % K5: q≈0.99 Δp_orf ≤ dP_cap
+cons.on.thermal_dT     = true;    % K6: ΔT_est ≤ ΔT_cap
+cons.on.cav_frac       = false;    % K7: kavitasyon payı sınırı
+cons.on.qsat_margin    = true;    % K8: Q 95p ≤ margin*Qcap_big
+cons.on.fail_bigM      = true;    % K9: Simülasyon başarısızsa büyük ceza
+
+% Eşikler / limitler
+cons.spring.tau_allow   = 300e6;  % [Pa] yay çeliği için tipik, gerekirse güncelle
+cons.spring.lambda_max  = 12.0;   % boy/çap sınırı
+cons.spring.L_free_mode = 'auto'; % 'auto' veya 'fixed'
+cons.spring.L_free_fix  = NaN;    % 'fixed' için metre cinsinden serbest boy
+cons.spring.L_free_auto_fac = 2.2; % 'auto' modda L_free ≈ fac * L_gap
+
+cons.stroke.util_factor = 0.90;   % izinli strok = 0.90*L_gap
+
+cons.force.F_cap        = 2e6;    % [N] cihaz kuvvet sınırı; sonlu → kısıt aktif (Inf → devre dışı)
+cons.dp.q               = 0.99;   % Δp_orf zaman-içi quantile
+cons.dp.agg             = 'max';  % kayıtlar arası: 'max' | 'cvar'
+cons.alpha_CVaR_cons    = 0.20;   % yalnız 'cvar' seçilirse kullanılır
+
+cons.thermal.cap_C      = 30.0;   % [°C] yağ ısınma sınırı
+cons.hyd.cav_frac_cap   = 0.15;   % kavitasyon zaman oranı sınırı (95p)
+cons.hyd.Q_margin       = 0.90;   % Q 95p ≤ margin*Qcap_big
+
+% Ceza ayarları
+cons.pen.power  = 2;              % hinge^power
+cons.pen.bigM   = 1e6;            % simülasyon başarısızlığında eklenecek ceza
+cons.pen.lambda = struct( ...     % kısıt başına ağırlıklar
+    'spring_tau',     0.3, ...%0.3
+    'spring_slender', 0.2, ...%0.2
+    'stroke',         1.2, ...%1.2
+    'force_cap',      0, ...%0
+    'dp_quant',       0.5, ...%0.5
+    'thermal_dT',     0.2, ...%0.2
+    'cav_frac',       1.5, ...%1.5
+    'qsat_margin',    0.3, ...%0.3
+    'fail_bigM',      1 );%
+
+% Kısıt simülasyon kaynağı ve μ seti (amaçla tutarlı kalsın)
+cons.src_for_constraints = 'raw';           % kısıtları 'raw' ile değerlendir
+if isfield(obj,'mu_scenarios')
+    cons.mu_scenarios = obj.mu_scenarios;
+else
+    cons.mu_scenarios = [0.75 1.00 1.25];  % varsayılan; aşağıda obj tanımlanınca senkronlayacağız
+=======
 [cfg_d, vis_d, prep_d, pp_d, sel_d, obj_d, cons_d, ga_d] = default_params();
 addpath(fileparts(mfilename('fullpath')));
 if nargin < 1 || isempty(cfg),  cfg  = cfg_d;  end
@@ -708,7 +803,6 @@ T_dev = table(Vals_Fmax, Vals_stroke, Vals_dpq, Vals_dT, Vals_cav, Vals_Qp95, ..
 writetable(T,    fullfile('out','cons_summary.csv'));
 writetable(T_dev,fullfile('out','device_summary.csv'));
 fprintf('CSV yazıldı: out/cons_summary.csv, out/device_summary.csv\n');
-
 
 % ---------- Yardımcılar ----------
 hinge  = @(r) max(0, r - 1);
