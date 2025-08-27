@@ -1,0 +1,25 @@
+{
+  "name": "MATLAB Dev",
+  "build": { "dockerfile": "Dockerfile" },
+
+  "containerEnv": {
+    // KENDİ SUNUCUNA GÖRE DÜZELT: "27000@license.myuniv.edu"
+    "MLM_LICENSE_FILE": "27000@license.myuniv.edu"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "mathworks.language-matlab",
+        "apommel.matlab-interactive-terminal"
+      ],
+      "settings": {
+        // MATLAB yürütücü yolu (imajın içindeki sabit yol):
+        "matlab.matlabPath": "/usr/local/MATLAB/R2024a/bin/matlab"
+      }
+    }
+  },
+
+  "postCreateCommand": "git lfs install",
+  "remoteUser": "root"
+}
