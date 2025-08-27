@@ -992,9 +992,9 @@ PARETO.feas(end+1,1)= (Penalty <= 1e-6);    % eşik: cezasız ≈ fizibıl
     % Güvenli büyük ceza + ayrıntılı rapor
     f = 1e9;
     aux = struct('err', getReport(ME, 'extended', 'hyperlinks', 'off'));
-end
+    end % try-catch
 
-end
+end % eval_fitness_for_x
 
 function cfg2 = cfg_with_ga(design_set,x,geom,sh,orf,hyd,therm,num,cfg)
     % simulate() tasarımı içerde decode ediyor; burada yalnız cfg’yi aynen geçiriyoruz.

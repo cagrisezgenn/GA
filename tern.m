@@ -5,3 +5,5 @@ function y = tern(cond,a,b)
         y = b;
     end
 end
+
+

@@ -1,4 +1,5 @@
 function val = acc_metric_from_series(t, a, t5, t95, obj)
+
     w = (t >= t5 & t <= t95);
     ai = a(w);
     switch lower(obj.acc_metric)
@@ -34,3 +35,7 @@ end
             val = sqrt(mean(aa.^2,'omitnan'));
     end
 end
+
+
+end
+
