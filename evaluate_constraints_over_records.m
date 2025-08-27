@@ -1,3 +1,4 @@
+
 function [Penalty, out] = evaluate_constraints_over_records( ...
     cons, src, obj, tail_sec, ...
     t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
@@ -9,7 +10,6 @@ function [Penalty, out] = evaluate_constraints_over_records( ...
     else
         design_set = 0; x_ga = [];
     end
-    ...
 
       % Kaynak seçimi
     useScaled = strcmpi(src,'scaled');
@@ -75,6 +75,7 @@ cfg_dir = set_pf_ton_if_nan(cfg, t5, 0.5);
             % >>>>>>>>>>>>>>>>> μ DÖNGÜSÜ (BURADA) <<<<<<<<<<<<<<<<<
             for k = 1:numel(mus)
                 resp = simulate(design_set, x_ga, mus(k), t_s, ag_s, ...
+                                M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir);
                                 M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir, LOG);
 
                 if ~resp.ok

@@ -9,6 +9,9 @@ function [J2, out] = compute_J2_ACC_over_records( ...
      
  
     useScaled = strcmpi(src,'scaled');
+
+    useScaled = strcmpi(src,'scaled');
+         useScaled = strcmpi(src,'scaled');
     if useScaled
         tX=t_sclX; tY=t_sclY; aX=a_sclX; aY=a_sclY;
         t5x=t5x_scl; t95x=t95x_scl; t5y=t5y_scl; t95y=t95y_scl;
@@ -79,6 +82,7 @@ function [J2, out] = compute_J2_ACC_over_records( ...
         vals = nan(size(mus));
         for k = 1:numel(mus)
             resp = simulate(design_set, x_ga, mus(k), t_s, ag_s, ...
+                            M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir);
                             M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir, LOG);
             if ~resp.ok
                 vals(k) = 5 * A_ref;  % fail durumunda güvenli büyük ceza

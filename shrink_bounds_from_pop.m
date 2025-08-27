@@ -12,3 +12,4 @@ function [lb2,ub2] = shrink_bounds_from_pop(pop, scores, lb, ub, keep_top, buf)
     ub2 = min(ub, p90 + buf.*span);
 end
 
+end

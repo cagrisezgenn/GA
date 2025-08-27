@@ -77,6 +77,7 @@ function [J1, out] = compute_J1_IDR_over_records( ...
         vals = nan(size(mus));
         for k = 1:numel(mus)
             resp = simulate(design_set, x_ga, mus(k), t_s, ag_s, ...
+                            M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir);
                             M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg_dir, LOG);
             if ~resp.ok
                 vals(k) = 5 * d_ref;  % fail durumunda güvenli büyük ceza
@@ -94,3 +95,4 @@ function [J1, out] = compute_J1_IDR_over_records( ...
 end
 
 
+end
