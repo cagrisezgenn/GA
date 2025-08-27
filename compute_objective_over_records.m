@@ -9,6 +9,7 @@ t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
     else
         design_set = 0; x_ga = [];
     end
+
     % local_design_ratios_one_dir içinde:
     % Simülasyon penceresi: aynı veriye kuyruk ekleyelim (PF ramp guard uyumu)
     % Kaynak seçici
@@ -114,6 +115,7 @@ tail_sec_loc = tail_sec;
         resp = simulate( ...
             design_set, x_ga, mus(k), t_s, ag_s, ...
             M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg_dir);
+            M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg_dir, LOG);
 
         if ~resp.ok
     fail_ratio = 5;              % istersen 3–10 arası dene
@@ -147,4 +149,3 @@ end
 end
 
 end
-
