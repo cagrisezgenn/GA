@@ -6,6 +6,12 @@ function [PARETO, LOG] = viscous(cfg, vis, prep, pp, sel, obj, cons, ga, LOG, PA
 %  Kavitasyon: p2_eff = max(p2, cav_sf * p_vap(T)) hem akışta hem kuvvette
 %  Solver: ode23tb (+ güvenli deval + ode15s fallback)
 %  NOT: Antoine katsayılarını yağınıza göre kalibre edin.
+% =====================================================================
+
+
+% Pareto log kaydı
+global PARETO;
+if isempty(whos('global','PARETO')) || isempty(PARETO)
 %% =====================================================================
 
 [cfg_d, vis_d, prep_d, pp_d, sel_d, obj_d, cons_d, ga_d] = default_params();
@@ -1191,4 +1197,3 @@ function [cfg, vis, prep, pp, sel, obj, cons, ga] = default_params()
     ga.opt.keep_top     = 0.20;
     ga.opt.buffer_fac   = 0.10;
 end
-
