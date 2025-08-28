@@ -61,8 +61,7 @@ if ~isfield(diag,'dP_orf_time_max') || any(~isfinite(diag.dP_orf_time_max))
     end
 end
 
-% Ana dizilerde tekil NaN/Inf temizliği (fail yerine yumuşat)
-fixnf = @(A) (A + 0.*A);          % sınıfı korumak için num trick
+% Ana dizilerde tekil NaN/Inf temizliği (fail yerine sıfırlama)
 xD(~isfinite(xD)) = 0;  aD(~isfinite(aD)) = 0;
 
         % ---- Standart çıktı paketi
