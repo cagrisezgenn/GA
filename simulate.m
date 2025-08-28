@@ -61,6 +61,7 @@ if ~isfield(diag,'dP_orf_time_max') || any(~isfinite(diag.dP_orf_time_max))
     end
 end
 
+
 % Ana dizilerde tekil NaN/Inf temizliği (fail yerine sıfırlama)
 xD(~isfinite(xD)) = 0;  aD(~isfinite(aD)) = 0;
 
@@ -95,7 +96,6 @@ xD(~isfinite(xD)) = 0;  aD(~isfinite(aD)) = 0;
         % Δp_orf için zaman-içi quantile hesap kolaylığı
         resp.dP_q_time = @(qq) prctile(resp.dP_orf_env, 100*qq);
 % ---- Sağlamlık kontrolleri
-resp.dP_orf_env = diag.dP_orf_time_max;  % (yukarıda garanti edildi)
 
 isBad = @(A) isempty(A) || any(~isfinite(A(:)));  % NaN/Inf veya boş
 
@@ -111,12 +111,6 @@ if numel(t) ~= size(xD,1) || numel(t) ~= size(aD,1)
     resp.msg = 'Zaman uzunluğu uyuşmazlığı';
     return;
 end
-
-
-        if numel(t)~=size(xD,1) || numel(t)~=size(aD,1)
-            resp.ok=false; resp.msg='Zaman uzunluğu uyuşmazlığı'; return;
-        end
-
         resp.ok=true; resp.msg='ok';
 
     catch ME
