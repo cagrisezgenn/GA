@@ -20,4 +20,9 @@ function cfg = ensure_cfg_defaults(cfg)
     if ~isfield(cfg.PF,'t_on'), cfg.PF.t_on = NaN; end
     if ~isfield(cfg.PF,'tau'),  cfg.PF.tau  = 2.5; end
     if ~isfield(cfg.PF,'gain'), cfg.PF.gain = 0.6; end
+    % constraint defaults
+    if ~isfield(cfg,'cons') || ~isstruct(cfg.cons), cfg.cons = struct(); end
+    if ~isfield(cfg.cons,'spring') || ~isstruct(cfg.cons.spring), cfg.cons.spring = struct(); end
+    if ~isfield(cfg.cons.spring,'use_fixed_length'), cfg.cons.spring.use_fixed_length = false; end
+    if ~isfield(cfg.cons.spring,'L_free_fixed'), cfg.cons.spring.L_free_fixed = NaN; end
 end
