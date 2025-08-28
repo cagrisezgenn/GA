@@ -15,11 +15,11 @@ function [lb,ub,int_idx,names] = ga_get_bounds(set_id)
             names = {'n_orf','Cd0','CdInf','Rec','p_exp','cav_sf','Lh','K_leak','resFactor'};
 
         otherwise % 3  (n_orf SABİT=2)
-            % [n_orf, Cd0, mu_ref, b_mu, beta0, b_beta, hA_os, dP_cap, Vmin_fac]
+            % [n_orf, Cd0, mu_ref, b_mu, beta0, b_beta, hA_os, dP_cap, Vmin_fac, resFactor]
             lb = [2, 0.64, 0.6, -0.012, 1.2e9, -6e-3, 450, 3e8, 0.90,  10];
             ub = [2, 0.68, 1.2, -0.007, 2.2e9, -2e-3, 800, 6e8, 0.95, 18];
             int_idx = 1; % n_orf (sabit ama interface için sorun değil)
-            names = {'n_orf','Cd0','mu_ref','b_mu','beta0','b_beta','hA_os','dP_cap','Vmin_fac'};
+            names = {'n_orf','Cd0','mu_ref','b_mu','beta0','b_beta','hA_os','dP_cap','Vmin_fac','resFactor'};
 
     end
 end

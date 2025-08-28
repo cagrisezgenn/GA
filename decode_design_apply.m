@@ -55,7 +55,7 @@ x = max(lb, min(ub, x));
             hyd.K_leak  = x(8);
             therm.resFactor = x(9);
         otherwise % 3
-            % [n_orf, Cd0, mu_ref, b_mu, beta0, b_beta, hA_os, dP_cap, Vmin_fac]
+            % [n_orf, Cd0, mu_ref, b_mu, beta0, b_beta, hA_os, dP_cap, Vmin_fac, resFactor]
             orf.n_orf   = x(1);
             orf.Cd0     = x(2);
             therm.mu_ref= x(3);
@@ -65,7 +65,7 @@ x = max(lb, min(ub, x));
             therm.hA_os = x(7);
             num.dP_cap  = x(8);
             hyd.Vmin_fac= x(9);
-therm.resFactor = x(10);
+            therm.resFactor = x(10);
     end
 
     ga.lb=lb; ga.ub=ub; ga.int_idx=int_idx; ga.names=names; ga.x_use=x;
