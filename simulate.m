@@ -103,12 +103,7 @@ xD(~isfinite(xD)) = 0;  aD(~isfinite(aD)) = 0;
         resp.dP_q_time = @(qq) prctile(resp.dP_orf_env, 100*qq);
 % ---- Sağlamlık kontrolleri
 
-isBad = @(A) isempty(A) || any(~isfinite(A(:)));  % NaN/Inf veya boş
-badVars = {};
-if isBad(xD), badVars{end+1} = 'xD'; end
-if isBad(aD), badVars{end+1} = 'aD'; end
-if isBad(vD), badVars{end+1} = 'vD'; end
-if isBad(resp.dP_orf_env), badVars{end+1} = 'dP_orf_env'; end
+badVars = validate_finite({'xD','aD','vD','resp.dP_orf_env'});
 if ~isempty(badVars)
     resp.ok  = false;
     resp.msg = ['NaN/Inf/empty tespit edildi: ' strjoin(badVars, ', ')];
