@@ -687,6 +687,44 @@ fprintf('DBG set-%d: n_orf=%d | d_o=%.3f mm | Ao=%.3e m^2 | Lgap=%.1f mm | Vmin_
 
 end
 
+% --- GA sonucunu uygula ve türetilenleri güncelle ---
+if isfield(ga, 'best_x') && ~isempty(ga.best_x)
+    ga.enable = true;
+    ga.x = ga.best_x;
+    ga.design_set = ga.best_set;
+    [geom, sh, orf, hyd, therm, num, ga] = decode_design_apply(ga, geom, sh, orf, hyd, therm, num);
+    ga.enable = false;
+    ga.x = [];
+end
+
+% Türetilen parametreleri güncelle
+geom.Ap   = pi*geom.Dp^2/4;
+orf.Ao    = orf.n_orf * (pi*geom.d_o^2/4);
+nd               = max(1, getfield_default(hyd,'n_parallel',1));
+geom.Ap_eff      = nd * geom.Ap;
+orf.Ao_eff       = nd * orf.Ao;
+hyd.n_parallel   = nd;
+cd_ref        = max(orf.CdInf, orf.Cd0);
+dp_for_qcap   = getfield_default(num,'dP_cap', 3e8);
+Ae_ref        = max(cd_ref * orf.Ao_eff, 1e-12);
+num.Qcap_big  = getfield_default(num,'Qcap_big', ...
+                    hyd.Vmin_fac * Ae_ref * sqrt( 2*dp_for_qcap / max(therm.rho_ref,100) ) );
+k_p   = sh.G*sh.d_w^4/(8*sh.n_turn*sh.D_m^3);
+k_h   = geom.Kd*geom.Ap^2/geom.Lgap;
+k_s   = geom.Ebody*geom.Ap/geom.Lgap;
+k_hyd = 1/(1/max(k_h,eps) + 1/max(k_s,eps));
+k_sd  = nd * (k_hyd + k_p);
+nStories         = n - 1;
+steel_to_oil_mass_ratio = 1.5;
+hyd.V0           = 0.5 * (geom.Ap * (2*geom.Lgap));
+V_oil_per        = therm.resFactor * (geom.Ap * (2*geom.Lgap));
+nDtot            = nStories * nd;
+m_oil_tot        = nDtot * (therm.rho_ref * V_oil_per);
+m_steel_tot      = steel_to_oil_mass_ratio * m_oil_tot;
+therm.C_oil      = m_oil_tot   * therm.cp_oil;
+therm.C_steel    = m_steel_tot * therm.cp_steel;
+R_lam0 = (128*therm.mu_ref*geom.Lori/(pi*geom.d_o^4)) / nd;
+
 
 
 %% -------------------- (1) Tek koşu: görselleştirme/diagnostic ---------
