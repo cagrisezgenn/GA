@@ -4,5 +4,5 @@ function h = md5(str)
     if isstring(str)
         str = char(str);
     end
-    h = lower(hash('md5', str));
+    h = lower(hash('md5', str, 'hex'));
 end
