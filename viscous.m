@@ -83,7 +83,7 @@ cons.spring.L_free_auto_fac = 2.2; % 'auto' modda L_free ≈ fac * L_gap
 
 cons.stroke.util_factor = 0.90;   % izinli strok = 0.90*L_gap
 
-cons.force.F_cap        = 2e6;    % [N] cihaz kuvvet sınırı; sonlu → kısıt aktif (Inf → devre dışı)
+cons.force.F_cap        = 2e6;    % [N] cihaz kuvvet sınırı (varsayılan: 2e6); kısıtı cons.on.force_cap ile aç/kapa
 cons.dp.q               = 0.99;   % Δp_orf zaman-içi quantile
 cons.dp.agg             = 'max';  % kayıtlar arası: 'max' | 'cvar'
 cons.alpha_CVaR_cons    = 0.20;   % yalnız 'cvar' seçilirse kullanılır
@@ -918,7 +918,7 @@ if cons.on.stroke
     fprintf('stroke/(0.9*L_gap)    = %.3f   [pen=%.3g]\n', r, pen_i);
 end
 
-if cons.on.force_cap && isfinite(cons.force.F_cap)
+if cons.on.force_cap
     r = norm0(cdt.ratios.force_cap);
     pen_i = lam.force_cap * hinge(r)^pwr; pen_sum = pen_sum + pen_i;
     fprintf('F_max/F_cap           = %.3f   [pen=%.3g]\n', r, pen_i);
@@ -1593,7 +1593,7 @@ end
     end
 
     % K4: cihaz kuvvet limiti
-    if cons.on.force_cap && isfinite(cons.force.F_cap)
+    if cons.on.force_cap
         ratios.force_cap = Fmax_all / max(cons.force.F_cap, eps);
     else
         ratios.force_cap = 0;
@@ -1638,7 +1638,7 @@ ratios.qsat_margin = Qp95_all / max(cons.hyd.Q_margin * Qcap, eps);
     if cons.on.spring_tau,     pen = pen + cons.pen.lambda.spring_tau     * hinge(ratios.spring_tau    )^pwr; end
     if cons.on.spring_slender, pen = pen + cons.pen.lambda.spring_slender * hinge(ratios.spring_slender)^pwr; end
     if cons.on.stroke,         pen = pen + cons.pen.lambda.stroke         * hinge(ratios.stroke        )^pwr; end
-    if cons.on.force_cap && isfinite(cons.force.F_cap)
+    if cons.on.force_cap
                                pen = pen + cons.pen.lambda.force_cap      * hinge(ratios.force_cap     )^pwr; end
     if cons.on.dp_quant,       pen = pen + cons.pen.lambda.dp_quant       * hinge(ratios.dp_quant      )^pwr; end
     if cons.on.thermal_dT,     pen = pen + cons.pen.lambda.thermal_dT     * hinge(ratios.thermal_dT    )^pwr; end
