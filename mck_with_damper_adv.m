@@ -1,5 +1,4 @@
 function [x,a,diag,varargout] = mck_with_damper_adv(t,ag,M,C,K,k_sd,geom,orf,hyd,therm,num,cfg)
-    antoine = struct('A', therm.antoine_A, 'B', therm.antoine_B, 'C', therm.antoine_C);
     nd = 1; if isfield(hyd,'n_parallel'), nd = max(1, round(hyd.n_parallel)); end
     Ao1 = max(orf.n_orf * (pi*geom.d_o^2/4), 1e-12);
     Ao  = nd * Ao1;              % toplam orifis alanı
@@ -72,9 +71,9 @@ function [x,a,diag,varargout] = mck_with_damper_adv(t,ag,M,C,K,k_sd,geom,orf,hyd
         if cfg.use_thermal
             rho=max(100,therm.rho_ref/(1+therm.alpha_rho*(T_o-therm.T_ref_C)));
             beta=max(1e8,therm.beta0*exp(therm.b_beta*(T_o-therm.T_ref_C)));
-            p_vap=p_vap_Antoine(T_o, antoine);
+            p_vap=p_vap_Antoine(T_o,therm,orf);
         else
-            rho=therm.rho_ref; beta=therm.beta0; p_vap=p_vap_Antoine(therm.T_ref_C, antoine);
+            rho=therm.rho_ref; beta=therm.beta0; p_vap=p_vap_Antoine(therm.T_ref_C,therm,orf);
         end
 
         drift = x(2:end) - x(1:end-1);
@@ -212,7 +211,7 @@ function [drift, F_story, dP_orf_t, T_oil, T_steel, mu_t, E_cum, ...
     else,                                   mu_t = cfg.use_thermal.*mu_raw + (~cfg.use_thermal).*therm.mu_ref; end
 
     rho_t   = max(100, therm.rho_ref ./ (1 + therm.alpha_rho*(T_oil - therm.T_ref_C)));
-    p_vap_t = p_vap_Antoine(T_oil, antoine);
+    p_vap_t = p_vap_Antoine(T_oil, therm, orf);
 
     cav_margin_t  = min(p2 - p_vap_t, [], 2);
     cav_margin_min = min(cav_margin_t, [], 'omitnan');
@@ -300,7 +299,7 @@ function F = dev_force_from_story(t, X, Z, k_sd, geom, hyd, therm, num, orf, cfg
     nd = 1; if isfield(hyd,'n_parallel'), nd = max(1, hyd.n_parallel); end
     Ap = nd * geom.Ap;
 
-    if cfg.use_thermal, p_vap=p_vap_Antoine(T_o, antoine); else, p_vap=p_vap_Antoine(therm.T_ref_C, antoine); end
+    if cfg.use_thermal, p_vap=p_vap_Antoine(T_o,therm,orf); else, p_vap=p_vap_Antoine(therm.T_ref_C,therm,orf); end
     if cfg.on.cavitation, p2_eff=max(p2,orf.cav_sf*p_vap); else, p2_eff=p2; end
 
     w_pf_vec = pf_weight(t,cfg) * cfg.PF.gain;
@@ -323,7 +322,13 @@ s = tanh(20*dvel);   % 20 ~ 1/(0.05 m/s) benzeri yumuşatma
     F(n,:) =  F_story(:,end).';
 end
 % ---- Buhar basıncı (Antoine) -----------------------------------------
-function p_v = p_vap_Antoine(T_C, antoine)
-    T_C=double(T_C); p_v = 10.^(antoine.A - antoine.B./(antoine.C + T_C));
-    p_v = min(max(p_v, 5), 5e2);     % 5–500 Pa
+function p_v = p_vap_Antoine(T_C, therm, ~)
+    if isfield(therm,'antoine_A') && isfield(therm,'antoine_B') && isfield(therm,'antoine_C')
+        A=therm.antoine_A; B=therm.antoine_B; C=therm.antoine_C;
+    else, A=5.0; B=1700; C=-80; end
+    T_C=double(T_C); p_v = 10.^(A - B./(C + T_C));
+p_v = min(max(p_v, 5), 5e2);     % 5–500 Pa
+
 end
+
+
