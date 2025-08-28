@@ -76,8 +76,9 @@ cons.on.fail_bigM      = true;    % K9: Simülasyon başarısızsa büyük ceza
 % Eşikler / limitler
 cons.spring.tau_allow   = 300e6;  % [Pa] yay çeliği için tipik, gerekirse güncelle
 cons.spring.lambda_max  = 12.0;   % boy/çap sınırı
-cons.spring.L_free_mode = 'auto'; % 'auto' veya 'fixed'
-cons.spring.L_free_fix  = NaN;    % 'fixed' için metre cinsinden serbest boy
+% true -> serbest yay boyu sabit değerden alınır; false -> boşluk oranına göre hesaplanır
+cons.spring.use_fixed_length = false;   % varsayılan: false
+cons.spring.L_free_fixed     = NaN;     % [m] use_fixed_length=true ise kullanılan serbest boy
 cons.spring.L_free_auto_fac = 2.2; % 'auto' modda L_free ≈ fac * L_gap
 
 cons.stroke.util_factor = 0.90;   % izinli strok = 0.90*L_gap
@@ -1573,8 +1574,8 @@ end
 
     % K2: burkulma/serbest boy oranı
     if cons.on.spring_slender
-        if strcmpi(cons.spring.L_free_mode,'fixed') && isfinite(cons.spring.L_free_fix)
-            L_free = cons.spring.L_free_fix;
+        if cons.spring.use_fixed_length && isfinite(cons.spring.L_free_fixed)
+            L_free = cons.spring.L_free_fixed;
         else
             L_free = cons.spring.L_free_auto_fac * geom.Lgap; % yaklaşıklama
         end
