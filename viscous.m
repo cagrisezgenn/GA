@@ -1048,7 +1048,9 @@ t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
     end
 
     R = numel(tX);
-    out(R) = struct('d_rel',NaN,'a_rel',NaN,'J_r',NaN);
+    out_rec(R) = struct('d_rel',NaN,'a_rel',NaN,'J_r',NaN);
+    logs = {};
+    fail_ratio = 5;  % fallback multiplier when simulation fails
 
     % Önce REFERANSLAR: (damper yok, μ=1.0) → her kayıt & (X,Y mevcutsa) yön için sabitlenir
     ref = struct('X',struct('d',nan(R,1),'a',nan(R,1)), ...
@@ -1083,15 +1085,22 @@ t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
         % Ağırlıklı toplam
         J_r = obj.weights_da(1)*d_rel + obj.weights_da(2)*a_rel;
 
-        out(r).d_rel = d_rel;
-        out(r).a_rel = a_rel;
-        out(r).J_r   = J_r;
+        out_rec(r).d_rel = d_rel;
+        out_rec(r).a_rel = a_rel;
+        out_rec(r).J_r   = J_r;
     end
 
     % CVaR(α) hesap
     alpha = min(max(obj.alpha_CVaR,eps),0.99);
-    Jlist = [out.J_r].';
+    Jlist = [out_rec.J_r].';
     J = cvar_from_samples(Jlist, alpha);
+    if ~isfinite(J)
+        msg = 'Objective J is NaN/Inf';
+        logs{end+1} = msg; log_msg('error', msg);
+        J = 1e9;
+    end
+
+    out = struct('records', out_rec, 'logs', {logs});
 
     % ---- iç yardımcılar ----
  
@@ -1142,7 +1151,9 @@ tail_sec_loc = tail_sec;
             M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg_dir);
 
         if ~resp.ok
-    fail_ratio = 5;              % istersen 3–10 arası dene
+    msg = sprintf('simulate fail (rec=%d dir=%s mu=%g): %s', r, which, mus(k), resp.msg);
+    logs{end+1} = msg; %#ok<AGROW>
+    log_msg('warn', msg);
     d_vals(k) = fail_ratio * d_ref;
     a_vals(k) = fail_ratio * a_ref;
     continue;
@@ -1170,6 +1181,16 @@ end
 
     d_rel_dir = d_agg / max(d_ref, eps);
     a_rel_dir = a_agg / max(a_ref, eps);
+    if ~isfinite(d_rel_dir)
+        d_rel_dir = fail_ratio;
+        msg = sprintf('NaN d_rel at rec=%d dir=%s', r, which);
+        logs{end+1} = msg; log_msg('warn', msg);
+    end
+    if ~isfinite(a_rel_dir)
+        a_rel_dir = fail_ratio;
+        msg = sprintf('NaN a_rel at rec=%d dir=%s', r, which);
+        logs{end+1} = msg; log_msg('warn', msg);
+    end
 end
 
 end
@@ -1430,6 +1451,7 @@ function [Penalty, out] = evaluate_constraints_over_records( ...
 
     R   = numel(tX);
     mus = cons.mu_scenarios(:).';
+    logs = {};
 
     % ----- Erken çıkış sayaç ayarları -----
     fail_early_k = 0;
@@ -1487,6 +1509,9 @@ cfg_dir = set_pf_ton_if_auto(cfg, t5, 0.5);
                 if ~resp.ok
                     fail_mu = true;
                     fail_count_global = fail_count_global + 1;
+                    msg = sprintf('simulate fail (rec=%d dir=%s mu=%g): %s', r, dir, mus(k), resp.msg);
+                    logs{end+1} = msg; %#ok<AGROW>
+                    log_msg('warn', msg);
 
                     if fail_early_k > 0 && fail_count_global >= fail_early_k
                         early_break_all = true;   % tüm döngülerden çık
@@ -1546,6 +1571,7 @@ if early_break_all
     out.dT_records     = dT_records;
     out.cav_records    = cav_records;
     out.Qp95_records   = Qp95_records;
+    out.logs           = logs;
     return
 end
 
@@ -1575,6 +1601,21 @@ end
             dpq_all = cvar_from_samples(dpq_records(:), cons.alpha_CVaR_cons);
         otherwise
             dpq_all = max(dpq_records, [], 'omitnan');
+    end
+
+    agg_vals = [Fmax_all stroke_all dpq_all dT_all cav_all Qp95_all];
+    if any(~isfinite(agg_vals))
+        names = {'Fmax','stroke','dpq','dT','cav','Qp95'};
+        msg = ['NaN/Inf aggregate: ' strjoin(names(~isfinite(agg_vals)), ', ')];
+        logs{end+1} = msg; %#ok<AGROW>
+        log_msg('error', msg);
+        Penalty = cons.pen.bigM;
+        out = struct('ratios',struct(),'any_fail',true,
+            'dpq_records',dpq_records,'Fmax_records',Fmax_records,
+            'stroke_records',stroke_records,'dT_records',dT_records,
+            'cav_records',cav_records,'Qp95_records',Qp95_records,
+            'logs',{logs});
+        return;
     end
 
     % ---- Oranlar (≥1 → ihlal)
@@ -1679,6 +1720,7 @@ ratios.qsat_margin = Qp95_all / max(cons.hyd.Q_margin * Qcap, eps);
     out.dT_records = dT_records;
     out.cav_records = cav_records;
     out.Qp95_records = Qp95_records;
+    out.logs = logs;
 end
 function ratio = spring_tau_ratio(Fmax, sh, tau_allow)
     C  = max(sh.D_m, eps) / max(sh.d_w, eps);

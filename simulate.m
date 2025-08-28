@@ -7,7 +7,8 @@ design_set = double(design_set);
 % Standart, güvenli tek çağrı noktası (GA ve çoklu denemeler için)
 
     resp = struct('ok',false,'msg','','y',struct(),'drift',[],'dvel',[], ...
-                  'dP_orf_env',[],'c_lam',NaN,'dT_est',NaN,'metrics',struct());
+                  'dP_orf_env',[],'c_lam',NaN,'dT_est',NaN,'metrics',struct(), ...
+                  'log',{{}});
     try
         % ---- guard + opsiyonel viskozite çarpanı
         % ensure PF defaults (e.g., auto_t_on)
@@ -99,10 +100,16 @@ xD(~isfinite(xD)) = 0;  aD(~isfinite(aD)) = 0;
 % ---- Sağlamlık kontrolleri
 
 isBad = @(A) isempty(A) || any(~isfinite(A(:)));  % NaN/Inf veya boş
-
-if isBad(xD) || isBad(aD) || isBad(vD) || isBad(resp.dP_orf_env)
+badVars = {};
+if isBad(xD), badVars{end+1} = 'xD'; end
+if isBad(aD), badVars{end+1} = 'aD'; end
+if isBad(vD), badVars{end+1} = 'vD'; end
+if isBad(resp.dP_orf_env), badVars{end+1} = 'dP_orf_env'; end
+if ~isempty(badVars)
     resp.ok  = false;
-    resp.msg = 'NaN/Inf/empty tespit edildi';
+    resp.msg = ['NaN/Inf/empty tespit edildi: ' strjoin(badVars, ', ')];
+    resp.log{end+1} = resp.msg;
+    log_msg('error', resp.msg);
     return;
 end
 
@@ -110,6 +117,8 @@ end
 if numel(t) ~= size(xD,1) || numel(t) ~= size(aD,1)
     resp.ok  = false;
     resp.msg = 'Zaman uzunluğu uyuşmazlığı';
+    resp.log{end+1} = resp.msg;
+    log_msg('error', resp.msg);
     return;
 end
         resp.ok=true; resp.msg='ok';
@@ -118,6 +127,8 @@ end
         % ---- Hata halinde NaN dolgulu güvenli dönüş
         N = numel(t); ntry = n;
         resp.ok=false; resp.msg=sprintf('simulate: %s',ME.message);
+        resp.log{end+1} = resp.msg;
+        log_msg('error', resp.msg);
         resp.y = struct('x',nan(N,ntry),'v',nan(N,ntry),'a',nan(N,ntry),'t',t(:));
         resp.drift = nan(N,max(ntry-1,1));
         resp.dvel  = nan(N,max(ntry-1,1));
