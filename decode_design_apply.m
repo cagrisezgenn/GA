@@ -1,4 +1,5 @@
 function [geom, sh, orf, hyd, therm, num, ga] = decode_design_apply(ga, geom, sh, orf, hyd, therm, num)
+    global LOG;
     % --- set_id'i güvene al (string/char gelirse sayıya çevir) ---
     set_id = ga.design_set;
     if isstring(set_id) || ischar(set_id)
@@ -71,13 +72,12 @@ x = max(lb, min(ub, x));
     ga.lb=lb; ga.ub=ub; ga.int_idx=int_idx; ga.names=names; ga.x_use=x;
     % ... (x hazırlandıktan SONRA)
     xdisp = strjoin( compose('%.3g', x(:).'), ', ' );  % 9 sayı -> "a, b, c..."
- % (Sessiz mod) — yalnızca LOG.verbose_decode=true ise yaz
-try
-    if evalin('base','exist(''LOG'',''var'')') && evalin('base','isstruct(LOG)') ...
-            && evalin('base','isfield(LOG,''verbose_decode'') && LOG.verbose_decode')
-        fprintf('GA decode: set=%s | x_use = [%s]\n', num2str(ga.design_set), xdisp);
+    % (Sessiz mod) — yalnızca LOG.verbose_decode=true ise yaz
+    try
+        if isfield(LOG,'verbose_decode') && LOG.verbose_decode
+            fprintf('GA decode: set=%s | x_use = [%s]\n', num2str(ga.design_set), xdisp);
+        end
+    catch
+        % LOG tanımlı değilse sessizce geç
     end
-catch
-    % base workspace erişimi yoksa sessizce geç
-end
 end

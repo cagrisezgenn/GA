@@ -1,5 +1,9 @@
 function resp = simulate(design_set, x, mu_mult, t, ag, ...
     M, Cstr, K, n, geom, sh, orf, hyd, therm, num, cfg)
+global LOG;
+    if isempty(LOG)
+        LOG = struct();
+    end
 design_set = double(design_set);
     if ~isfinite(design_set) || ~ismember(design_set,[1 2 3])
         design_set = 1;
