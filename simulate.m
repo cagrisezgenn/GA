@@ -10,6 +10,7 @@ design_set = double(design_set);
                   'dP_orf_env',[],'c_lam',NaN,'dT_est',NaN,'metrics',struct());
     try
         % ---- guard + opsiyonel viskozite çarpanı
+        % ensure PF defaults (e.g., auto_t_on)
         cfg = ensure_cfg_defaults(cfg);
         if ~isempty(mu_mult) && isfinite(mu_mult) && mu_mult>0
             therm.mu_ref = therm.mu_ref * mu_mult;
@@ -47,8 +48,8 @@ therm.C_steel = m_steel_tot*therm.cp_steel;
 
     
        % ---- PF guard: t5 + 0.5
-[t5_sim,~] = arias_win(t, ag, 0.05, 0.95);
-cfg = set_pf_ton_if_auto(cfg, t5_sim, 0.5);   % <-- BURASI: t5_plot → t5_sim
+        [t5_sim,~] = arias_win(t, ag, 0.05, 0.95);
+        cfg = set_pf_ton_if_auto(cfg, t5_sim, 0.5);  % auto_t_on -> t_on=t5+0.5
 
         % ---- Çözüm (hız isteğe bağlı çıktıyla)
         [xD, aD, diag, vD] = mck_with_damper_adv(t, ag, M, Cstr, K, k_sd, geom, orf, hyd, therm, num, cfg);
