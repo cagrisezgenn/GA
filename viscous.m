@@ -163,9 +163,9 @@ cfg.PF.auto_t_on  = true;   % true -> t_on = t5 + 0.5 via set_pf_ton_if_auto
 cfg.PF.t_on       = 0;      % auto_t_on=false ise manuel değer (s)
 cfg.PF.tau        = 0.9;    % 4.0 → 1.5  (önerim)
 cfg.PF.gain       = 1.7;    % 0.45 → 1.0 (önerim)
-cfg.on.pf_resistive_only = true;
+cfg.on.pf_resistive_only = true;  % sadece rezistif PF bileşeni kullan
 
-% Eksik/yanlış alanlar için güvenli tamamlayıcı (guard)
+% Eksik/yanlış alanlar için güvenli tamamlayıcı (guard; PF.auto_t_on dahil)
 cfg = ensure_cfg_defaults(cfg);
 
 %% -------------------- GA/Opt tasarım anahtarları ----------------------
@@ -1776,7 +1776,7 @@ end
 function cfg2 = cfg_with_ga(design_set,x,geom,sh,orf,hyd,therm,num,cfg)
     % simulate() tasarımı içerde decode ediyor; burada yalnız cfg’yi aynen geçiriyoruz.
     %#ok<INUSD>
-    cfg2 = ensure_cfg_defaults(cfg);
+    cfg2 = ensure_cfg_defaults(cfg);  % fills PF.auto_t_on, etc.
 end
 function [xbest, fbest, output, pop, scores, exitflag] = ga_call_compat(fhandle, lb, ub, IntCon, opts)
 % GA için sürüm-uyumlu çağrı (6/4/2 çıktı destekler)

@@ -16,11 +16,12 @@ function cfg = ensure_cfg_defaults(cfg)
     end
     % PF struct
     if ~isfield(cfg,'PF') || ~isstruct(cfg.PF), cfg.PF = struct(); end
-    if ~isfield(cfg.PF,'mode'),      cfg.PF.mode = 'ramp'; end
-    if ~isfield(cfg.PF,'auto_t_on'), cfg.PF.auto_t_on = true; end
-    if ~isfield(cfg.PF,'t_on'),      cfg.PF.t_on = 0; end
-    if ~isfield(cfg.PF,'tau'),       cfg.PF.tau  = 2.5; end
-    if ~isfield(cfg.PF,'gain'),      cfg.PF.gain = 0.6; end
+    % auto_t_on=true -> t_on = t5 + 0.5 via set_pf_ton_if_auto
+    cfg.PF.mode      = getfield_default(cfg.PF,'mode','ramp');
+    cfg.PF.auto_t_on = getfield_default(cfg.PF,'auto_t_on', true);
+    cfg.PF.t_on      = getfield_default(cfg.PF,'t_on', 0);
+    cfg.PF.tau       = getfield_default(cfg.PF,'tau',  2.5);
+    cfg.PF.gain      = getfield_default(cfg.PF,'gain', 0.6);
     % constraint defaults
     if ~isfield(cfg,'cons') || ~isstruct(cfg.cons), cfg.cons = struct(); end
     if ~isfield(cfg.cons,'spring') || ~isstruct(cfg.cons.spring), cfg.cons.spring = struct(); end
