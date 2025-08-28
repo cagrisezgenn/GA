@@ -273,44 +273,44 @@ if pp.on.intensity
     end
 
     % Band Sa (parfor opsiyonel)
+    tPSA   = cell(R,1);
+    agPSA  = cell(R,1);
     Sa_band = zeros(R,1);
     canPar  = pp.PSA.use_parfor && ~isempty(ver('parallel'));
     if canPar
         parfor r=1:R
             if pp.PSA.downsample_enabled
-                [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+                [tLoc,agLoc] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
             else
-                tPSA = t_rawX{r};
-                agPSA = a_rawX{r};
+                tLoc  = t_rawX{r};
+                agLoc = a_rawX{r};
             end
-            Sa_band(r) = f_band(tPSA, agPSA, T1, zeta_SA, band_fac, Np_band);
+            Sa_band(r) = f_band(tLoc, agLoc, T1, zeta_SA, band_fac, Np_band);
+            tPSA{r}  = tLoc;
+            agPSA{r} = agLoc;
         end
     else
         for r=1:R
             if pp.PSA.downsample_enabled
-                [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+                [tLoc,agLoc] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
             else
-                tPSA = t_rawX{r};
-                agPSA = a_rawX{r};
+                tLoc  = t_rawX{r};
+                agLoc = a_rawX{r};
             end
-            Sa_band(r) = f_band(tPSA, agPSA, T1, zeta_SA, band_fac, Np_band);
+            Sa_band(r) = f_band(tLoc, agLoc, T1, zeta_SA, band_fac, Np_band);
+            tPSA{r}  = tLoc;
+            agPSA{r} = agLoc;
         end
     end
     Sa_band_target = median(Sa_band);
 
     % Her kayıt için ölçek uygula (yalnız GA amaçlı; solver varsayılanı RAW)
     for r=1:R
-        if pp.PSA.downsample_enabled
-            [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
-        else
-            tPSA = t_rawX{r};
-            agPSA = a_rawX{r};
-        end
-        Sab_r  = f_band(tPSA, agPSA, T1, zeta_SA, band_fac, Np_band);
+        Sab_r  = f_band(tPSA{r}, agPSA{r}, T1, zeta_SA, band_fac, Np_band);
         s_band = Sa_band_target / max(Sab_r,eps);
 
         if useCMS
-            Sa_rec = f_vec(tPSA, agPSA, T_cms, zeta_SA);
+            Sa_rec = f_vec(tPSA{r}, agPSA{r}, T_cms, zeta_SA);
             nume   = max(sum(Sa_rec.*Sa_cms),eps);
             deno   = max(sum(Sa_rec.*Sa_rec),eps);
             s_cms  = nume/deno;
