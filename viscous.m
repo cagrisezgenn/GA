@@ -1610,10 +1610,10 @@ end
         logs{end+1} = msg; %#ok<AGROW>
         log_msg('error', msg);
         Penalty = cons.pen.bigM;
-        out = struct('ratios',struct(),'any_fail',true,
-            'dpq_records',dpq_records,'Fmax_records',Fmax_records,
-            'stroke_records',stroke_records,'dT_records',dT_records,
-            'cav_records',cav_records,'Qp95_records',Qp95_records,
+         out = struct('ratios',struct(),'any_fail',true, ...
+            'dpq_records',dpq_records,'Fmax_records',Fmax_records, ...
+            'stroke_records',stroke_records,'dT_records',dT_records, ...
+            'cav_records',cav_records,'Qp95_records',Qp95_records, ...
             'logs',{logs});
         return;
     end
