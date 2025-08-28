@@ -39,8 +39,9 @@ pp.gammaCMS          = 0.50;       % hibrit ağırlık (0→yalnız band, 1→ya
 pp.PSA.zeta          = 0.05;       % SDOF sönüm oranı
 pp.PSA.band_fac      = [0.8 1.2];  % T1 bandı (T1±%20)
 pp.PSA.Np_band       = 15;         % band içi periyot sayısı
-pp.PSA.downsample_dt = 0.02;       % SA hesabı için isteğe bağlı downsample (<=0 kapalı)
-pp.PSA.use_parfor    = false;      % Parallel Toolbox varsa denersin
+pp.PSA.downsample_enabled = true;  % SA hesabı için downsample kullan (false → ham dt)
+pp.PSA.downsample_dt      = 0.02;  % [s] downsample hedef dt; yalnız downsample_enabled=true iken
+pp.PSA.use_parfor        = false;  % Parallel Toolbox varsa denersin
 
 % (4) Arias penceresi & kuyruk
 pp.on.arias          = true;
@@ -275,12 +276,22 @@ if pp.on.intensity
     canPar  = pp.PSA.use_parfor && ~isempty(ver('parallel'));
     if canPar
         parfor r=1:R
-            [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+            if pp.PSA.downsample_enabled
+                [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+            else
+                tPSA = t_rawX{r};
+                agPSA = a_rawX{r};
+            end
             Sa_band(r) = f_band(tPSA, agPSA, T1, zeta_SA, band_fac, Np_band);
         end
     else
         for r=1:R
-            [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+            if pp.PSA.downsample_enabled
+                [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+            else
+                tPSA = t_rawX{r};
+                agPSA = a_rawX{r};
+            end
             Sa_band(r) = f_band(tPSA, agPSA, T1, zeta_SA, band_fac, Np_band);
         end
     end
@@ -288,7 +299,12 @@ if pp.on.intensity
 
     % Her kayıt için ölçek uygula (yalnız GA amaçlı; solver varsayılanı RAW)
     for r=1:R
-        [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+        if pp.PSA.downsample_enabled
+            [tPSA,agPSA] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+        else
+            tPSA = t_rawX{r};
+            agPSA = a_rawX{r};
+        end
         Sab_r  = f_band(tPSA, agPSA, T1, zeta_SA, band_fac, Np_band);
         s_band = Sa_band_target / max(Sab_r,eps);
 
