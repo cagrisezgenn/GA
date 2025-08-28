@@ -2038,5 +2038,5 @@ function key = hash_psa_prep(t_cells, a_cells, params)
         if ~isempty(a_cells{i}), buf = [buf; a_cells{i}(:)]; end
     end
     buf = [buf; params(:)];
-    key = hash('md5', char(typecast(buf, 'uint8')).');
+    key = lower(md5(num2str(buf(:)', '%.16g,')));
 end

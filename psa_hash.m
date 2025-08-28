@@ -7,5 +7,5 @@ function key = psa_hash(t, ag, T_vec, zeta)
     if ~isempty(ag),    data = [data; ag(:)]; end
     if ~isempty(T_vec), data = [data; T_vec(:)]; end
     if ~isempty(zeta),  data = [data; zeta(:)]; end
-    key = hash('md5', char(typecast(data,'uint8')).');
+    key = lower(md5(num2str(data(:)', '%.16g,')));
 end
