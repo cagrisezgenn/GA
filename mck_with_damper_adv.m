@@ -136,7 +136,7 @@ function [x,a,diag,varargout] = mck_with_damper_adv(t,ag,M,C,K,k_sd,geom,orf,hyd
         end
 
         % --- Damper kuvveti (yay + PF) — RESISTIVE-ONLY KLAMP BURADA ---
-        w_pf    = pf_weight_scalar(tt, cfg) * cfg.PF.gain;
+        w_pf = cfg.on.pressure_force * (1 - exp(-max(tt - cfg.PF.t_on, 0) / max(cfg.PF.tau, 1e-6)));
         F_story = k_sd * drift;
 
         if cfg.on.pressure_force
@@ -146,7 +146,7 @@ s = tanh(20*dvel);   % 20 ~ 1/(0.05 m/s) benzeri yumuşatma
                 % İstersen daha yumuşak için: s = tanh(20*dvel);
                 dp_pf = s .* max(0, s .* dp_pf);  % yalnız dirençli bileşen
             end
-            F_story = F_story + Ap * (w_pf .* dp_pf);  % w_pf skaler
+            F_story = F_story + Ap * (cfg.PF.gain * w_pf .* dp_pf);  % w_pf skaler
         end
 
         % --- Kuvvet dağıtımı, yapı ODE ---
@@ -219,7 +219,7 @@ function [drift, F_story, dP_orf_t, T_oil, T_steel, mu_t, E_cum, ...
     if cfg.on.cavitation, p2_eff = max(p2, orf.cav_sf * p_vap_t); else, p2_eff = p2; end
 
     % ---- PF kuvveti: RESISTIVE-ONLY burada uygulanıyor ----
-    w_pf_vec = pf_weight_vec(t, cfg) * cfg.PF.gain;
+    w_pf_vec = pf_weight(t, cfg) * cfg.PF.gain;
     if cfg.on.pressure_force
         dp_pf = (p1 - p2_eff);                         % Nt x Ns
         if isfield(cfg,'on') && isfield(cfg.on,'pf_resistive_only') && cfg.on.pf_resistive_only
@@ -302,7 +302,7 @@ function F = dev_force_from_story(t, X, Z, k_sd, geom, hyd, therm, num, orf, cfg
     if cfg.use_thermal, p_vap=p_vap_Antoine(T_o,therm,orf); else, p_vap=p_vap_Antoine(therm.T_ref_C,therm,orf); end
     if cfg.on.cavitation, p2_eff=max(p2,orf.cav_sf*p_vap); else, p2_eff=p2; end
 
-    w_pf_vec = pf_weight_vec(t,cfg)*cfg.PF.gain;
+    w_pf_vec = pf_weight(t,cfg) * cfg.PF.gain;
 
     if cfg.on.pressure_force
         dp_pf = (p1 - p2_eff);                  % Nt x Ns
@@ -321,30 +321,6 @@ s = tanh(20*dvel);   % 20 ~ 1/(0.05 m/s) benzeri yumuşatma
     if n>2, F(2:n-1,:) = (F_story(:,1:end-1) - F_story(:,2:end)).'; end
     F(n,:) =  F_story(:,end).';
 end
-
-
-% ---- PF ramp ağırlığı -------------------------------------------------
-function w = pf_weight_scalar(tt,cfg)
-    if ~cfg.on.pressure_force, w=0; return; end
-    switch lower(cfg.PF.mode)
-        case 'off', w=0;
-        case 'on',  w=1;
-        otherwise
-            dt=max(tt-cfg.PF.t_on,0); w=1-exp(-dt/max(cfg.PF.tau,1e-6));
-    end
-    w=min(max(w,0),1);
-end
-function wv = pf_weight_vec(t,cfg)
-    if ~cfg.on.pressure_force, wv=zeros(size(t)); return; end
-    switch lower(cfg.PF.mode)
-        case 'off', wv=zeros(size(t));
-        case 'on',  wv=ones(size(t));
-        otherwise
-            dt=max(t-cfg.PF.t_on,0); wv=1-exp(-dt/max(cfg.PF.tau,1e-6));
-    end
-    wv=min(max(wv,0),1);
-end
-
 % ---- Buhar basıncı (Antoine) -----------------------------------------
 function p_v = p_vap_Antoine(T_C, therm, ~)
     if isfield(therm,'antoine_A') && isfield(therm,'antoine_B') && isfield(therm,'antoine_C')
