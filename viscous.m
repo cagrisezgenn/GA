@@ -158,10 +158,11 @@ cfg.on.mu_floor        = true;
 
 
 % Basınç-kuvvet rampa/kazanç (PF)
-cfg.PF.mode  = 'ramp';
-cfg.PF.t_on  = nan;      % t5 sonrası atanacak  <-- BURASI NaN KALSIN
-cfg.PF.tau   = 0.9;      % 4.0 → 1.5  (önerim)
-cfg.PF.gain  = 1.7;      % 0.45 → 1.0 (önerim)
+cfg.PF.mode       = 'ramp';
+cfg.PF.auto_t_on  = true;   % true -> t_on = t5 + 0.5 via set_pf_ton_if_auto
+cfg.PF.t_on       = 0;      % auto_t_on=false ise manuel değer (s)
+cfg.PF.tau        = 0.9;    % 4.0 → 1.5  (önerim)
+cfg.PF.gain       = 1.7;    % 0.45 → 1.0 (önerim)
 cfg.on.pf_resistive_only = true;
 
 % Eksik/yanlış alanlar için güvenli tamamlayıcı (guard)
@@ -700,7 +701,7 @@ t_sim   = [t_sim; t_tail];
 ag_sim  = [ag_sim; zeros(size(t_tail))];
 
 % PF rampası (sim penceresine göre) — guard
-cfg = set_pf_ton_if_nan(cfg, t5_sim, 0.5);
+cfg = set_pf_ton_if_auto(cfg, t5_sim, 0.5);
 
 fprintf('SIM source=%s | rec #%d | dir=%s | N=%d | dt=%.3g s | Arias [%.2f, %.2f] s\n', ...
         sel.sim_source, rec, dir, numel(t_sim), dt_sim, t5_sim, t95_sim);
@@ -718,7 +719,7 @@ if vis.dual_run_if_needed && ~strcmpi(sel.plot_source, sel.sim_source)
     t_plot  = [t_plot; t_tail];
     ag_plot = [ag_plot; zeros(size(t_tail))];
 
-    cfg_plot = set_pf_ton_if_nan(cfg_plot, t5_plot, 0.5);
+    cfg_plot = set_pf_ton_if_auto(cfg_plot, t5_plot, 0.5);
 
     [x0,a0] = lin_MCK_consistent(t_plot, ag_plot, M, Cstr, K);
     [xD,aD,dlog,vD] = mck_with_damper_adv( ...
@@ -1128,7 +1129,7 @@ tail_sec_loc = tail_sec;
     ag_s   = [ag; zeros(size(t_tail))];
 
     % PF ramp t_on: Arias t5 + 3
-    cfg_dir = set_pf_ton_if_nan(cfg, t5, 0.5);
+    cfg_dir = set_pf_ton_if_auto(cfg, t5, 0.5);
 
 
     % μ senaryoları
@@ -1278,7 +1279,7 @@ function [J1, out] = compute_J1_IDR_over_records( ...
         t_s    = [t; t_tail];
         ag_s   = [ag; zeros(size(t_tail))];
 
-        cfg_dir = set_pf_ton_if_nan(cfg, t5, 0.5);
+        cfg_dir = set_pf_ton_if_auto(cfg, t5, 0.5);
 
         vals = nan(size(mus));
         for k = 1:numel(mus)
@@ -1376,7 +1377,7 @@ function [J2, out] = compute_J2_ACC_over_records( ...
         t_tail = (t(end)+dt : dt : t(end)+tail_sec).';
         t_s    = [t; t_tail];
         ag_s   = [ag; zeros(size(t_tail))];
-        cfg_dir = set_pf_ton_if_nan(cfg, t5, 0.5);
+        cfg_dir = set_pf_ton_if_auto(cfg, t5, 0.5);
 
         vals = nan(size(mus));
         for k = 1:numel(mus)
@@ -1471,7 +1472,7 @@ function [Penalty, out] = evaluate_constraints_over_records( ...
             ag_s  = [ag; zeros(size(t_tail))];
 
             % ---- PF ramp koruması
-cfg_dir = set_pf_ton_if_nan(cfg, t5, 0.5);
+cfg_dir = set_pf_ton_if_auto(cfg, t5, 0.5);
 
 
             % ---- μ-senaryosu zarfı

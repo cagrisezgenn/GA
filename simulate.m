@@ -48,7 +48,7 @@ therm.C_steel = m_steel_tot*therm.cp_steel;
     
        % ---- PF guard: t5 + 0.5
 [t5_sim,~] = arias_win(t, ag, 0.05, 0.95);
-cfg = set_pf_ton_if_nan(cfg, t5_sim, 0.5);   % <-- BURASI: t5_plot → t5_sim
+cfg = set_pf_ton_if_auto(cfg, t5_sim, 0.5);   % <-- BURASI: t5_plot → t5_sim
 
         % ---- Çözüm (hız isteğe bağlı çıktıyla)
         [xD, aD, diag, vD] = mck_with_damper_adv(t, ag, M, Cstr, K, k_sd, geom, orf, hyd, therm, num, cfg);
