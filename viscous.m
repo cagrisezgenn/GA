@@ -12,6 +12,7 @@ clear; clc; close all;
 % Global log anahtarları
 global LOG; LOG = struct('verbose_decode', false);
 global PARETO;
+global PSA_PREP_CACHE;
 if isempty(whos('global','PARETO')) || isempty(PARETO)
     PARETO = struct('J1',[],'J2',[],'F',[],'Pen',[], ...
                     'set',[],'x',{{}},'feas',[]);
@@ -272,36 +273,52 @@ if pp.on.intensity
         end
     end
 
-    % Band Sa (parfor opsiyonel)
-    tPSA   = cell(R,1);
-    agPSA  = cell(R,1);
-    Sa_band = zeros(R,1);
-    canPar  = pp.PSA.use_parfor && ~isempty(ver('parallel'));
-    if canPar
-        parfor r=1:R
-            if pp.PSA.downsample_enabled
-                [tLoc,agLoc] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
-            else
-                tLoc  = t_rawX{r};
-                agLoc = a_rawX{r};
-            end
-            Sa_band(r) = f_band(tLoc, agLoc, T1, zeta_SA, band_fac, Np_band);
-            tPSA{r}  = tLoc;
-            agPSA{r} = agLoc;
-        end
+    % Önceden hesaplanan PSA var mı?
+    global PSA_PREP_CACHE
+    params_vec = [T1, zeta_SA, band_fac(:).', Np_band, ...
+                  pp.PSA.downsample_dt, double(pp.PSA.downsample_enabled)];
+    prep_key = hash_psa_prep(t_rawX, a_rawX, params_vec);
+
+    if ~isempty(PSA_PREP_CACHE) && isfield(PSA_PREP_CACHE,'key') ...
+            && strcmp(PSA_PREP_CACHE.key, prep_key)
+        tPSA   = PSA_PREP_CACHE.tPSA;
+        agPSA  = PSA_PREP_CACHE.agPSA;
+        Sa_band = PSA_PREP_CACHE.Sa_band;
     else
-        for r=1:R
-            if pp.PSA.downsample_enabled
-                [tLoc,agLoc] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
-            else
-                tLoc  = t_rawX{r};
-                agLoc = a_rawX{r};
+        % Band Sa (parfor opsiyonel)
+        tPSA   = cell(R,1);
+        agPSA  = cell(R,1);
+        Sa_band = zeros(R,1);
+        canPar  = pp.PSA.use_parfor && ~isempty(ver('parallel'));
+        if canPar
+            parfor r=1:R
+                if pp.PSA.downsample_enabled
+                    [tLoc,agLoc] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+                else
+                    tLoc  = t_rawX{r};
+                    agLoc = a_rawX{r};
+                end
+                Sa_band(r) = f_band(tLoc, agLoc, T1, zeta_SA, band_fac, Np_band);
+                tPSA{r}  = tLoc;
+                agPSA{r} = agLoc;
             end
-            Sa_band(r) = f_band(tLoc, agLoc, T1, zeta_SA, band_fac, Np_band);
-            tPSA{r}  = tLoc;
-            agPSA{r} = agLoc;
+        else
+            for r=1:R
+                if pp.PSA.downsample_enabled
+                    [tLoc,agLoc] = psa_grid(t_rawX{r}, a_rawX{r}, pp.PSA.downsample_dt);
+                else
+                    tLoc  = t_rawX{r};
+                    agLoc = a_rawX{r};
+                end
+                Sa_band(r) = f_band(tLoc, agLoc, T1, zeta_SA, band_fac, Np_band);
+                tPSA{r}  = tLoc;
+                agPSA{r} = agLoc;
+            end
         end
+        PSA_PREP_CACHE = struct('key',prep_key,'tPSA',{tPSA}, ...
+                                'agPSA',{agPSA},'Sa_band',Sa_band);
     end
+
     Sa_band_target = median(Sa_band);
 
     % Her kayıt için ölçek uygula (yalnız GA amaçlı; solver varsayılanı RAW)
@@ -2010,4 +2027,16 @@ function [J1, J2] = compute_objectives_split( ...
         t_rawX,t_rawY,a_rawX,a_rawY,t_sclX,t_sclY,a_sclX,a_sclY, ...
         t5x_raw,t95x_raw,t5y_raw,t95y_raw,t5x_scl,t95x_scl,t5y_scl,t95y_scl, ...
         M,Cstr,K,n,geom,sh,orf,hyd,therm,num,cfg, design_set, x_ga);
+end
+
+%% ---------------------------------------------------------------------
+function key = hash_psa_prep(t_cells, a_cells, params)
+%HASH_PSA_PREP Create hash for PSA preparation inputs
+    buf = [];
+    for i = 1:numel(t_cells)
+        if ~isempty(t_cells{i}), buf = [buf; t_cells{i}(:)]; end
+        if ~isempty(a_cells{i}), buf = [buf; a_cells{i}(:)]; end
+    end
+    buf = [buf; params(:)];
+    key = hash('md5', char(typecast(buf, 'uint8')).');
 end

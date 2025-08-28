@@ -3,6 +3,13 @@ function Sa_vec = sdof_PSA_vec_aug_ode(t, ag, T_vec, zeta)
 % t: zaman vektörü, ag: yer ivmesi, T_vec: periyotlar, zeta: sönüm oranı
 
     T_vec = T_vec(:); Np = numel(T_vec);
+
+    % --- Önce önbelleği kontrol et ------------------------------------
+    key     = psa_hash(t, ag, T_vec, zeta);
+    Sa_vec  = psa_cache('get', key);
+    if ~isempty(Sa_vec), return; end
+
+    % Hesaplama
     wn = 2*pi./max(T_vec,eps);
     agf = griddedInterpolant(t, ag, 'linear','nearest');
 
@@ -21,6 +28,9 @@ function Sa_vec = sdof_PSA_vec_aug_ode(t, ag, T_vec, zeta)
                 - (ones(Nt,1)*(wn.'.^2)).*X ...
                 - ag(:)*ones(1,Np) );    % Nt x Np
     Sa_vec = max(Aabs,[],1).';
+
+    % Sonucu önbelleğe yaz
+    psa_cache('set', key, Sa_vec);
 end
 
 function dz = aug_rhs(tt,zz,wn,zeta,agf)
